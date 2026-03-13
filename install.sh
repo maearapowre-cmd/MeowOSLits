@@ -1,23 +1,23 @@
 #!/bin/bash
-# MeowOS Web Desktop – automatická instalace
+# MeowOS Web Desktop – Arch Linux edice
 # Autor: Jakub (s asistencí AI)
 
-set -e  # Skript se zastaví při jakékoli chybě
+set -e
 
 echo "🔧 Aktualizuji systém a instaluji potřebné balíčky..."
 sudo apt update
 sudo apt install -y python3-flask python3-psutil wireless-tools
 
 echo "📁 Vytvářím složku pro aplikaci..."
-mkdir -p ~/meowos-web
-cd ~/meowos-web
+mkdir -p ~/meowos-arch
+cd ~/meowos-arch
 
-echo "🐱 Vytvářím hlavní soubor app.py..."
+echo "🐧 Vytvářím hlavní soubor app.py..."
 cat > app.py << 'EOF'
 #!/usr/bin/env python3
 """
-MeowOS Web – desktopová simulace Windows 11 s glass efekty a reálnými daty
-Autor: Jakub (upraveno s asistencí AI)
+MeowOS Arch – desktopová simulace ve stylu Arch Linuxu
+Autor: Jakub
 Licence: MIT
 """
 
@@ -31,11 +31,10 @@ from flask import Flask, render_template_string, jsonify, request
 app = Flask(__name__)
 
 # ============================================================================
-# Pomocné funkce pro získání systémových dat
+# Pomocné funkce
 # ============================================================================
 
 def get_cpu_temperature():
-    """Vrátí teplotu CPU ve °C."""
     try:
         with open('/sys/class/thermal/thermal_zone0/temp', 'r') as f:
             return round(int(f.read().strip()) / 1000, 1)
@@ -43,7 +42,6 @@ def get_cpu_temperature():
         return 0
 
 def get_disks():
-    """Vrátí seznam disků (mount pointů) s informacemi o využití."""
     disks = []
     for part in psutil.disk_partitions():
         if part.fstype and part.device.startswith('/dev'):
@@ -62,7 +60,6 @@ def get_disks():
     return disks
 
 def get_wifi_status():
-    """Zkusí zjistit název připojené Wi-Fi sítě (přes iwgetid)."""
     try:
         result = subprocess.run(['iwgetid', '-r'], capture_output=True, text=True, timeout=2)
         if result.returncode == 0 and result.stdout.strip():
@@ -72,7 +69,7 @@ def get_wifi_status():
     return 'Nepřipojeno'
 
 # ============================================================================
-# Hlavní HTML šablona (vše v jednom)
+# HTML šablona
 # ============================================================================
 
 HTML_TEMPLATE = """
@@ -81,54 +78,48 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MeowOS Web</title>
+    <title>MeowOS Arch</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+            font-family: 'Segoe UI', 'Roboto', system-ui, sans-serif;
         }
 
         body {
             width: 100vw;
             height: 100vh;
             overflow: hidden;
-            background: linear-gradient(145deg, #0f172a 0%, #1e293b 100%);
+            background: var(--wallpaper, linear-gradient(145deg, #0f172a 0%, #1e293b 100%));
+            background-size: cover;
+            background-position: center;
             position: relative;
+            transition: background 0.3s;
         }
 
-        /* ==================================================================
-           DESKTOP – plocha pro okna
-           ================================================================== */
         #desktop {
             width: 100%;
             height: 100%;
-            padding-bottom: 48px;  /* místo pro taskbar */
+            padding-bottom: 48px;
             position: relative;
             overflow: hidden;
         }
 
-        /* ==================================================================
-           OKNA (WINDOWS) – glass efekt, zaoblené rohy, přetahovatelné
-           ================================================================== */
+        /* ========================= OKNA ========================= */
         .window {
             position: absolute;
             min-width: 400px;
             min-height: 300px;
-            background: rgba(15, 25, 45, 0.65);
+            background: rgba(15, 25, 45, 0.7);
             backdrop-filter: blur(15px);
             -webkit-backdrop-filter: blur(15px);
-            border: 1px solid rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255,255,255,0.1);
             border-radius: 12px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
             display: flex;
             flex-direction: column;
-            transition: box-shadow 0.2s;
             z-index: 10;
-        }
-        .window:active {
-            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.8);
         }
         .window.maximized {
             width: 100% !important;
@@ -140,10 +131,8 @@ HTML_TEMPLATE = """
         .window.minimized {
             display: none !important;
         }
-
-        /* Hlavička okna */
         .window-header {
-            background: rgba(30, 40, 60, 0.8);
+            background: rgba(20, 30, 50, 0.8);
             padding: 8px 12px;
             border-radius: 12px 12px 0 0;
             display: flex;
@@ -152,9 +141,6 @@ HTML_TEMPLATE = """
             cursor: grab;
             user-select: none;
             border-bottom: 1px solid rgba(255,255,255,0.1);
-        }
-        .window-header:active {
-            cursor: grabbing;
         }
         .window-title {
             color: white;
@@ -188,34 +174,21 @@ HTML_TEMPLATE = """
         .close-btn:hover {
             background: #c42b1c !important;
         }
-
-        /* Obsah okna */
         .window-content {
             flex: 1;
             padding: 16px;
             color: white;
             overflow-y: auto;
-            scrollbar-width: thin;
-            scrollbar-color: rgba(255,255,255,0.3) transparent;
-        }
-        .window-content::-webkit-scrollbar {
-            width: 6px;
-        }
-        .window-content::-webkit-scrollbar-thumb {
-            background: rgba(255,255,255,0.3);
-            border-radius: 3px;
         }
 
-        /* ==================================================================
-           TASKBAR (Windows 11 styl)
-           ================================================================== */
+        /* ========================= TASKBAR ========================= */
         #taskbar {
             position: fixed;
             bottom: 0;
             left: 0;
             width: 100%;
             height: 48px;
-            background: rgba(20, 25, 40, 0.7);
+            background: rgba(10, 15, 25, 0.7);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
             border-top: 1px solid rgba(255,255,255,0.1);
@@ -227,7 +200,7 @@ HTML_TEMPLATE = """
         .taskbar-center {
             display: flex;
             gap: 4px;
-            background: rgba(255,255,255,0.05);
+            background: rgba(255,255,255,0.03);
             padding: 4px 8px;
             border-radius: 12px;
         }
@@ -239,7 +212,7 @@ HTML_TEMPLATE = """
             align-items: center;
             justify-content: center;
             color: white;
-            font-size: 18px;
+            font-size: 20px;
             transition: 0.2s;
             cursor: pointer;
         }
@@ -261,23 +234,21 @@ HTML_TEMPLATE = """
             border-radius: 20px;
         }
 
-        /* ==================================================================
-           START MENU
-           ================================================================== */
+        /* ========================= START MENU ========================= */
         #start-menu {
             position: fixed;
             bottom: 60px;
             left: 50%;
             transform: translateX(-50%);
             width: 480px;
-            background: rgba(25, 30, 45, 0.8);
+            background: rgba(15, 20, 30, 0.8);
             backdrop-filter: blur(30px);
             -webkit-backdrop-filter: blur(30px);
             border-radius: 20px;
-            border: 1px solid rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.1);
             padding: 20px;
             color: white;
-            box-shadow: 0 30px 60px rgba(0,0,0,0.6);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.8);
             display: none;
             z-index: 1100;
         }
@@ -290,6 +261,9 @@ HTML_TEMPLATE = """
             margin-bottom: 20px;
             padding-bottom: 10px;
             border-bottom: 1px solid rgba(255,255,255,0.2);
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
         .start-apps {
             display: grid;
@@ -317,9 +291,7 @@ HTML_TEMPLATE = """
             font-size: 12px;
         }
 
-        /* ==================================================================
-           IKONY A DALŠÍ PRVKY
-           ================================================================== */
+        /* ========================= IKONY SOUBORŮ ========================= */
         .icon-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
@@ -344,101 +316,145 @@ HTML_TEMPLATE = """
         .file-icon:hover {
             background: rgba(255,255,255,0.15);
             transform: scale(1.02);
-            border-color: rgba(100, 150, 255, 0.5);
         }
         .file-icon i {
             font-size: 40px;
             filter: drop-shadow(0 10px 8px rgba(0,0,0,0.3));
         }
 
-        /* Navigační panel file manageru */
-        .fm-sidebar {
-            width: 200px;
-            background: rgba(0,0,0,0.2);
-            border-radius: 10px;
-            padding: 12px;
-        }
-        .fm-sidebar-item {
-            padding: 10px 12px;
-            border-radius: 8px;
-            margin-bottom: 4px;
-            color: rgba(255,255,255,0.8);
+        /* ========================= TERMINÁL ========================= */
+        .terminal-container {
             display: flex;
-            align-items: center;
-            gap: 10px;
-            cursor: pointer;
-        }
-        .fm-sidebar-item:hover {
-            background: rgba(255,255,255,0.1);
-        }
-        .fm-main {
-            flex: 1;
-            padding-left: 20px;
-        }
-
-        /* Progress bar pro disky */
-        .disk-item {
-            margin-bottom: 20px;
-        }
-        .disk-info {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 5px;
-            color: white;
-        }
-        .progress-bar {
-            width: 100%;
-            height: 10px;
-            background: rgba(255,255,255,0.2);
-            border-radius: 5px;
-            overflow: hidden;
-        }
-        .progress-fill {
+            flex-direction: column;
             height: 100%;
-            background: linear-gradient(90deg, #4facfe, #00f2fe);
-            border-radius: 5px;
-            transition: width 0.3s;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+        }
+        .terminal-output {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+            color: #0f0;
+            white-space: pre-wrap;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        .terminal-input-line {
+            display: flex;
+            padding: 5px 10px;
+            background: rgba(0,0,0,0.5);
+            border-top: 1px solid #0f0;
+        }
+        .terminal-prompt {
+            color: #0f0;
+            margin-right: 8px;
+            font-weight: bold;
+        }
+        .terminal-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            outline: none;
         }
 
-        /* Utility */
-        .hidden { display: none; }
-        .flex-row { display: flex; flex-direction: row; gap: 16px; }
-        .flex-col { display: flex; flex-direction: column; gap: 8px; }
+        /* ========================= KALKULAČKA ========================= */
+        .calculator {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            padding: 10px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+        }
+        .calc-display {
+            grid-column: span 4;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            text-align: right;
+            padding: 15px;
+            font-size: 24px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-family: monospace;
+        }
+        .calc-btn {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: white;
+            padding: 15px;
+            font-size: 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .calc-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+        .calc-btn.operator {
+            background: rgba(100, 150, 255, 0.3);
+        }
+
+        /* ========================= TAPETY ========================= */
+        #wallpaper-picker {
+            position: fixed;
+            top: 60px;
+            right: 20px;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            padding: 10px;
+            display: none;
+            z-index: 2000;
+        }
+        #wallpaper-picker.visible {
+            display: block;
+        }
+        .wallpaper-option {
+            width: 80px;
+            height: 50px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+        .wallpaper-option:hover {
+            border-color: white;
+        }
     </style>
-    <!-- Font Awesome pro ikony -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
 <body>
-    <div id="desktop">
-        <!-- Okna se budou přidávat dynamicky JavaScriptem -->
-    </div>
+    <div id="desktop"></div>
 
-    <!-- Taskbar -->
     <div id="taskbar">
         <div class="taskbar-center">
-            <div class="taskbar-icon" onclick="toggleStartMenu()"><i class="fa-brands fa-windows"></i></div>
+            <div class="taskbar-icon" onclick="toggleStartMenu()"><i class="fa-brands fa-linux"></i></div>
             <div class="taskbar-icon" onclick="openApp('search')"><i class="fa-solid fa-magnifying-glass"></i></div>
             <div class="taskbar-icon" onclick="openApp('edge')"><i class="fa-brands fa-edge"></i></div>
             <div class="taskbar-icon" onclick="openFileManager()"><i class="fa-regular fa-folder-open"></i></div>
             <div class="taskbar-icon" onclick="openApp('firefox')"><i class="fa-brands fa-firefox-browser"></i></div>
         </div>
         <div class="taskbar-right">
+            <div class="taskbar-icon" onclick="toggleWallpaperPicker()"><i class="fa-solid fa-image"></i></div>
             <div><i class="fa-solid fa-wifi"></i> <span id="wifi-status">Načítám...</span></div>
             <div><i class="fa-solid fa-battery-full"></i> <span>100%</span></div>
             <div class="taskbar-time" id="taskbar-time"></div>
         </div>
     </div>
 
-    <!-- Start Menu -->
     <div id="start-menu">
         <div class="start-header">
-            <i class="fa-regular fa-user"></i> Jakub
+            <i class="fa-brands fa-linux"></i> Arch Linux
         </div>
         <div class="start-apps">
             <div class="start-app" onclick="openApp('settings')"><i class="fa-solid fa-gear"></i><span>Nastavení</span></div>
             <div class="start-app" onclick="openFileManager()"><i class="fa-regular fa-folder"></i><span>Explorer</span></div>
             <div class="start-app" onclick="openTerminal()"><i class="fa-solid fa-terminal"></i><span>Terminál</span></div>
-            <div class="start-app" onclick="openApp('calculator')"><i class="fa-solid fa-calculator"></i><span>Kalkulačka</span></div>
+            <div class="start-app" onclick="openCalculator()"><i class="fa-solid fa-calculator"></i><span>Kalkulačka</span></div>
             <div class="start-app" onclick="openThisPC()"><i class="fa-solid fa-computer"></i><span>Tento PC</span></div>
             <div class="start-app" onclick="openApp('edge')"><i class="fa-brands fa-edge"></i><span>Edge</span></div>
             <div class="start-app" onclick="openApp('firefox')"><i class="fa-brands fa-firefox-browser"></i><span>Firefox</span></div>
@@ -446,19 +462,26 @@ HTML_TEMPLATE = """
         </div>
     </div>
 
+    <div id="wallpaper-picker">
+        <div class="wallpaper-option" style="background: linear-gradient(145deg, #0f172a, #1e293b);" onclick="changeWallpaper('linear-gradient(145deg, #0f172a, #1e293b)')"></div>
+        <div class="wallpaper-option" style="background: linear-gradient(145deg, #2d1a3a, #1a2f3f);" onclick="changeWallpaper('linear-gradient(145deg, #2d1a3a, #1a2f3f)')"></div>
+        <div class="wallpaper-option" style="background: linear-gradient(145deg, #1a3a2d, #1a2f3f);" onclick="changeWallpaper('linear-gradient(145deg, #1a3a2d, #1a2f3f)')"></div>
+        <div class="wallpaper-option" style="background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=200') center/cover;" onclick="changeWallpaper('url(https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800)')"></div>
+        <div class="wallpaper-option" style="background: url('https://images.unsplash.com/photo-1510798831971-661eb04b3739?w=200') center/cover;" onclick="changeWallpaper('url(https://images.unsplash.com/photo-1510798831971-661eb04b3739?w=800)')"></div>
+    </div>
+
     <script>
-        // ====================================================================
-        // GLOBÁLNÍ PROMĚNNÉ
-        // ====================================================================
+        // ========================= GLOBÁLNÍ PROMĚNNÉ =========================
         let windows = [];
         let zIndexCounter = 100;
         let draggedWindow = null;
         let dragOffsetX, dragOffsetY;
         let startMenuVisible = false;
+        let wallpaperPickerVisible = false;
+        let terminalHistory = [];
+        let historyIndex = -1;
 
-        // ====================================================================
-        // POMOCNÉ FUNKCE
-        // ====================================================================
+        // ========================= POMOCNÉ FUNKCE =========================
         function updateClock() {
             const now = new Date();
             const timeStr = now.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
@@ -467,18 +490,13 @@ HTML_TEMPLATE = """
         setInterval(updateClock, 1000);
         updateClock();
 
-        // Načtení Wi‑Fi stavu z API
         function updateWifi() {
-            fetch('/api/wifi')
-                .then(r => r.text())
-                .then(status => document.getElementById('wifi-status').innerText = status);
+            fetch('/api/wifi').then(r => r.text()).then(s => document.getElementById('wifi-status').innerText = s);
         }
         setInterval(updateWifi, 5000);
         updateWifi();
 
-        // ====================================================================
-        // SPRÁVA OKEN
-        // ====================================================================
+        // ========================= SPRÁVA OKEN =========================
         function createWindow(title, contentHtml, width = 600, height = 400, x = 100, y = 100) {
             const id = 'win_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
             const desktop = document.getElementById('desktop');
@@ -492,18 +510,16 @@ HTML_TEMPLATE = """
             winDiv.style.top = y + 'px';
             winDiv.style.zIndex = ++zIndexCounter;
 
-            // Hlavička
             const header = document.createElement('div');
             header.className = 'window-header';
             header.innerHTML = `
-                <div class="window-title"><i class="fa-regular fa-window-maximize"></i> ${title}</div>
+                <div class="window-title"><i class="fa-brands fa-linux"></i> ${title}</div>
                 <div class="window-controls">
                     <button class="window-btn" onclick="minimizeWindow('${id}')"><i class="fa-solid fa-minus"></i></button>
                     <button class="window-btn" onclick="maximizeWindow('${id}')"><i class="fa-solid fa-square"></i></button>
                     <button class="window-btn close-btn" onclick="closeWindow('${id}')"><i class="fa-solid fa-xmark"></i></button>
                 </div>
             `;
-            // Obsah
             const content = document.createElement('div');
             content.className = 'window-content';
             content.innerHTML = contentHtml;
@@ -512,7 +528,6 @@ HTML_TEMPLATE = """
             winDiv.appendChild(content);
             desktop.appendChild(winDiv);
 
-            // Události pro přetahování
             header.addEventListener('mousedown', (e) => startDrag(e, winDiv));
             winDiv.addEventListener('mousedown', () => bringToFront(winDiv));
 
@@ -521,7 +536,7 @@ HTML_TEMPLATE = """
         }
 
         function startDrag(e, win) {
-            if (e.target.closest('.window-btn')) return; // nechytat tlačítka
+            if (e.target.closest('.window-btn')) return;
             draggedWindow = win;
             const rect = win.getBoundingClientRect();
             dragOffsetX = e.clientX - rect.left;
@@ -535,10 +550,9 @@ HTML_TEMPLATE = """
             if (!draggedWindow) return;
             let newX = e.clientX - dragOffsetX;
             let newY = e.clientY - dragOffsetY;
-            // Omezení na desktop (s rezervou pro taskbar)
             const desktop = document.getElementById('desktop');
             const maxX = desktop.clientWidth - draggedWindow.offsetWidth;
-            const maxY = desktop.clientHeight - draggedWindow.offsetHeight - 48; // nad taskbarem
+            const maxY = desktop.clientHeight - draggedWindow.offsetHeight - 48;
             newX = Math.max(0, Math.min(newX, maxX));
             newY = Math.max(0, Math.min(newY, maxY));
             draggedWindow.style.left = newX + 'px';
@@ -557,54 +571,38 @@ HTML_TEMPLATE = """
 
         function minimizeWindow(id) {
             const win = document.getElementById(id);
-            if (win) {
-                win.classList.add('minimized');
-                const w = windows.find(w => w.id === id);
-                if (w) w.minimized = true;
-            }
+            if (win) win.classList.add('minimized');
         }
 
         function maximizeWindow(id) {
             const win = document.getElementById(id);
             if (!win) return;
-            const w = windows.find(w => w.id === id);
-            if (w && w.maximized) {
-                // obnovit původní velikost – pro jednoduchost jen odstraníme třídu
+            if (win.classList.contains('maximized')) {
                 win.classList.remove('maximized');
-                w.maximized = false;
             } else {
                 win.classList.add('maximized');
-                w.maximized = true;
-                w.minimized = false;
                 win.classList.remove('minimized');
             }
         }
 
         function closeWindow(id) {
             const win = document.getElementById(id);
-            if (win) {
-                win.remove();
-                windows = windows.filter(w => w.id !== id);
-            }
+            if (win) win.remove();
+            windows = windows.filter(w => w.id !== id);
         }
 
-        // ====================================================================
-        // APLIKACE
-        // ====================================================================
+        // ========================= APLIKACE =========================
         function openFileManager() {
             const content = `
-                <div class="flex-row">
-                    <div class="fm-sidebar">
+                <div style="display: flex; gap: 20px;">
+                    <div style="width: 200px; background: rgba(0,0,0,0.2); border-radius: 10px; padding: 10px;">
                         <div class="fm-sidebar-item"><i class="fa-regular fa-house"></i> Home</div>
-                        <div class="fm-sidebar-item"><i class="fa-regular fa-image"></i> Gallery</div>
-                        <div class="fm-sidebar-item"><i class="fa-brands fa-onedrive"></i> OneDrive</div>
-                        <div class="fm-sidebar-item"><i class="fa-regular fa-desktop"></i> Desktop</div>
-                        <div class="fm-sidebar-item"><i class="fa-regular fa-file"></i> Documents</div>
-                        <div class="fm-sidebar-item"><i class="fa-regular fa-image"></i> Pictures</div>
-                        <div class="fm-sidebar-item"><i class="fa-regular fa-music"></i> Music</div>
-                        <div class="fm-sidebar-item"><i class="fa-regular fa-video"></i> Videos</div>
+                        <div class="fm-sidebar-item"><i class="fa-regular fa-image"></i> Obrázky</div>
+                        <div class="fm-sidebar-item"><i class="fa-regular fa-file"></i> Dokumenty</div>
+                        <div class="fm-sidebar-item"><i class="fa-regular fa-music"></i> Hudba</div>
+                        <div class="fm-sidebar-item"><i class="fa-regular fa-video"></i> Videa</div>
                     </div>
-                    <div class="fm-main">
+                    <div style="flex:1;">
                         <div class="icon-grid">
                             <div class="file-icon"><i class="fa-regular fa-folder"></i><span>Desktop</span></div>
                             <div class="file-icon"><i class="fa-regular fa-folder"></i><span>Downloads</span></div>
@@ -616,94 +614,160 @@ HTML_TEMPLATE = """
                     </div>
                 </div>
             `;
-            createWindow('Souborový manažer', content, 700, 450, 150, 100);
+            createWindow('Správce souborů', content, 700, 450, 150, 100);
         }
 
         function openThisPC() {
             fetch('/api/disks')
                 .then(r => r.json())
                 .then(disks => {
-                    let html = '<div class="flex-col">';
+                    let html = '<div style="display: flex; flex-direction: column; gap: 15px;">';
                     disks.forEach(disk => {
                         const totalGB = (disk.total / 1e9).toFixed(1);
                         const usedGB = (disk.used / 1e9).toFixed(1);
                         html += `
-                            <div class="disk-item">
-                                <div class="disk-info">
-                                    <span><i class="fa-regular fa-hard-drive"></i> ${disk.name} (${disk.device})</span>
+                            <div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                    <span><i class="fa-regular fa-hard-drive"></i> ${disk.name}</span>
                                     <span>${usedGB} GB / ${totalGB} GB</span>
                                 </div>
-                                <div class="progress-bar">
-                                    <div class="progress-fill" style="width: ${disk.percent}%"></div>
+                                <div style="width:100%; height:10px; background: rgba(255,255,255,0.2); border-radius:5px;">
+                                    <div style="width:${disk.percent}%; height:100%; background: linear-gradient(90deg, #4facfe, #00f2fe); border-radius:5px;"></div>
                                 </div>
                             </div>
                         `;
                     });
                     html += '</div>';
-                    createWindow('Tento PC', html, 500, 350, 200, 150);
+                    createWindow('Tento počítač', html, 500, 350, 200, 150);
                 });
         }
 
         function openTerminal() {
             const content = `
-                <div style="display: flex; flex-direction: column; height: 100%;">
-                    <div id="term-output" style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 10px; flex: 1; overflow-y: auto; font-family: monospace; white-space: pre-wrap; color: #0f0;"></div>
-                    <div style="display: flex; margin-top: 8px;">
-                        <span style="color: #0f0; margin-right: 5px;">$</span>
-                        <input type="text" id="term-input" style="flex: 1; background: rgba(0,0,0,0.5); border: none; border-radius: 4px; color: #0f0; padding: 5px; font-family: monospace;" placeholder="zadej příkaz">
+                <div class="terminal-container" id="term-${Date.now()}">
+                    <div class="terminal-output" id="term-output">Vítejte v terminálu MeowOS Arch\\n</div>
+                    <div class="terminal-input-line">
+                        <span class="terminal-prompt">$</span>
+                        <input type="text" class="terminal-input" id="term-input" autofocus>
                     </div>
                 </div>
             `;
-            const winId = createWindow('Terminál', content, 600, 400, 250, 200);
-            // Po vytvoření okna připojíme event listener na input
+            const winId = createWindow('Terminál', content, 650, 400, 250, 200);
             setTimeout(() => {
                 const input = document.getElementById('term-input');
-                if (input) {
-                    input.addEventListener('keypress', (e) => {
-                        if (e.key === 'Enter') {
-                            const cmd = input.value;
-                            const outputDiv = document.getElementById('term-output');
-                            outputDiv.innerHTML += `$ ${cmd}\\n`;
-                            fetch('/api/cmd', {
-                                method: 'POST',
-                                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                                body: 'cmd=' + encodeURIComponent(cmd)
-                            })
-                            .then(r => r.text())
-                            .then(data => {
-                                outputDiv.innerHTML += data + '\\n';
-                                outputDiv.scrollTop = outputDiv.scrollHeight;
-                            });
+                const output = document.getElementById('term-output');
+                if (!input) return;
+
+                input.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') {
+                        const cmd = input.value;
+                        output.innerHTML += `$ ${cmd}\\n`;
+                        fetch('/api/cmd', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                            body: 'cmd=' + encodeURIComponent(cmd)
+                        })
+                        .then(r => r.text())
+                        .then(data => {
+                            output.innerHTML += data + '\\n';
+                            output.scrollTop = output.scrollHeight;
+                        });
+                        terminalHistory.push(cmd);
+                        historyIndex = terminalHistory.length;
+                        input.value = '';
+                    } else if (e.key === 'ArrowUp') {
+                        if (historyIndex > 0) {
+                            historyIndex--;
+                            input.value = terminalHistory[historyIndex];
+                        }
+                        e.preventDefault();
+                    } else if (e.key === 'ArrowDown') {
+                        if (historyIndex < terminalHistory.length - 1) {
+                            historyIndex++;
+                            input.value = terminalHistory[historyIndex];
+                        } else {
+                            historyIndex = terminalHistory.length;
                             input.value = '';
                         }
-                    });
-                }
+                        e.preventDefault();
+                    }
+                });
             }, 100);
         }
 
+        function openCalculator() {
+            const content = `
+                <div class="calculator">
+                    <div class="calc-display" id="calc-display">0</div>
+                    <button class="calc-btn" onclick="calcInput('7')">7</button>
+                    <button class="calc-btn" onclick="calcInput('8')">8</button>
+                    <button class="calc-btn" onclick="calcInput('9')">9</button>
+                    <button class="calc-btn operator" onclick="calcOperator('/')">/</button>
+                    <button class="calc-btn" onclick="calcInput('4')">4</button>
+                    <button class="calc-btn" onclick="calcInput('5')">5</button>
+                    <button class="calc-btn" onclick="calcInput('6')">6</button>
+                    <button class="calc-btn operator" onclick="calcOperator('*')">*</button>
+                    <button class="calc-btn" onclick="calcInput('1')">1</button>
+                    <button class="calc-btn" onclick="calcInput('2')">2</button>
+                    <button class="calc-btn" onclick="calcInput('3')">3</button>
+                    <button class="calc-btn operator" onclick="calcOperator('-')">-</button>
+                    <button class="calc-btn" onclick="calcInput('0')">0</button>
+                    <button class="calc-btn" onclick="calcDot()">.</button>
+                    <button class="calc-btn" onclick="calcEquals()">=</button>
+                    <button class="calc-btn operator" onclick="calcOperator('+')">+</button>
+                    <button class="calc-btn" style="grid-column: span 4;" onclick="calcClear()">C</button>
+                </div>
+            `;
+            createWindow('Kalkulačka', content, 300, 400, 300, 150);
+        }
+
+        // Globální funkce pro kalkulačku
+        window.calcInput = function(d) {
+            const disp = document.getElementById('calc-display');
+            if (disp.innerText === '0') disp.innerText = d;
+            else disp.innerText += d;
+        };
+        window.calcOperator = function(op) {
+            const disp = document.getElementById('calc-display');
+            disp.innerText += ' ' + op + ' ';
+        };
+        window.calcDot = function() {
+            const disp = document.getElementById('calc-display');
+            if (!disp.innerText.includes('.')) disp.innerText += '.';
+        };
+        window.calcClear = function() {
+            document.getElementById('calc-display').innerText = '0';
+        };
+        window.calcEquals = function() {
+            try {
+                const result = eval(document.getElementById('calc-display').innerText);
+                document.getElementById('calc-display').innerText = result;
+            } catch {
+                document.getElementById('calc-display').innerText = 'Error';
+            }
+        };
+
         function openApp(appName) {
-            if (appName === 'filemanager') openFileManager();
-            else if (appName === 'thispc') openThisPC();
-            else if (appName === 'terminal') openTerminal();
-            else {
-                createWindow(appName.charAt(0).toUpperCase() + appName.slice(1), `<div style="padding:20px; text-align:center;">Aplikace ${appName} by zde byla otevřena.</div>`, 400, 250, 300, 150);
+            if (appName === 'search') {
+                createWindow('Hledání', '<div style="padding:20px;">Zadejte hledaný výraz...</div>', 400, 200, 200, 150);
+            } else if (appName === 'edge') {
+                window.open('https://www.microsoft.com/edge', '_blank');
+            } else if (appName === 'firefox') {
+                window.open('https://www.mozilla.org/firefox', '_blank');
+            } else if (appName === 'settings') {
+                createWindow('Nastavení', '<div style="padding:20px;">Nastavení systému (zatím není implementováno)</div>', 500, 400, 200, 150);
+            } else if (appName === 'store') {
+                createWindow('Obchod', '<div style="padding:20px;">Obchod s aplikacemi (demo)</div>', 500, 400, 200, 150);
             }
         }
 
-        // ====================================================================
-        // START MENU
-        // ====================================================================
+        // ========================= START MENU =========================
         function toggleStartMenu() {
             const menu = document.getElementById('start-menu');
             startMenuVisible = !startMenuVisible;
-            if (startMenuVisible) {
-                menu.classList.add('visible');
-            } else {
-                menu.classList.remove('visible');
-            }
+            menu.classList.toggle('visible', startMenuVisible);
         }
 
-        // Kliknutí mimo start menu ho zavře
         document.addEventListener('click', function(e) {
             const menu = document.getElementById('start-menu');
             const startBtn = document.querySelector('.taskbar-icon:first-child');
@@ -713,9 +777,19 @@ HTML_TEMPLATE = """
             }
         });
 
-        // ====================================================================
-        // INICIALIZACE – vytvoříme úvodní okna
-        // ====================================================================
+        // ========================= TAPETY =========================
+        function toggleWallpaperPicker() {
+            const picker = document.getElementById('wallpaper-picker');
+            wallpaperPickerVisible = !wallpaperPickerVisible;
+            picker.classList.toggle('visible', wallpaperPickerVisible);
+        }
+
+        window.changeWallpaper = function(value) {
+            document.body.style.setProperty('--wallpaper', value);
+            toggleWallpaperPicker();
+        };
+
+        // ========================= INICIALIZACE =========================
         window.onload = function() {
             openFileManager();
             openThisPC();
@@ -725,10 +799,7 @@ HTML_TEMPLATE = """
 </html>
 """
 
-# ============================================================================
-# ROUTY FLASK
-# ============================================================================
-
+# ========================= ROUTY =========================
 @app.route('/')
 def index():
     return render_template_string(HTML_TEMPLATE)
@@ -755,12 +826,9 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
 EOF
 
-echo "✅ Soubor app.py byl vytvořen."
-
+echo "✅ Aplikace vytvořena."
 echo "🚀 Spouštím server..."
-echo "Pro přístup otevři prohlížeč na adrese: http://$(hostname -I | awk '{print $1}'):5000"
-echo "Pro ukončení serveru stiskni Ctrl+C."
-
-cd ~/meowos-web
+echo "Připoj se na http://$(hostname -I | awk '{print $1}'):5000"
+cd ~/meowos-arch
 python3 app.py
 EOF
