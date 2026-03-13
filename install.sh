@@ -1,3 +1,20 @@
+#!/bin/bash
+# MeowOS Arch – kompletní instalace včetně Python kódu
+# Autor: Jakub (s asistencí AI)
+
+set -e
+
+echo "🔧 Aktualizuji systém a instaluji potřebné balíčky..."
+sudo apt update
+sudo apt install -y python3-flask python3-psutil wireless-tools
+
+echo "📁 Vytvářím složku pro aplikaci..."
+mkdir -p ~/meowos-arch
+cd ~/meowos-arch
+
+echo "🐧 Vytvářím hlavní soubor app.py (toto může chvíli trvat)..."
+
+cat > app.py << 'EOF'
 #!/usr/bin/env python3
 """
 MeowOS Arch – kompletní desktop s plnohodnotným Nastavením
@@ -36,7 +53,6 @@ def load_config():
         try:
             with open(CONFIG_FILE, 'r') as f:
                 config = json.load(f)
-                # doplní chybějící klíče z výchozího nastavení
                 for k, v in DEFAULT_CONFIG.items():
                     if k not in config:
                         config[k] = v
@@ -1013,7 +1029,6 @@ HTML_TEMPLATE = """
                 });
         }
 
-        // Funkce pro získání aktuální konfigurace z CSS proměnných
         function getConfig(key) {
             const style = getComputedStyle(document.body);
             if (key === 'window_opacity') {
@@ -1025,6 +1040,8 @@ HTML_TEMPLATE = """
             }
             if (key === 'font_size') return style.getPropertyValue('--font-size');
             if (key === 'primary_color') return style.getPropertyValue('--primary');
+            if (key === 'wifi_enabled') return true;  // zjednodušeno
+            if (key === 'volume') return 80;          // zjednodušeno
             return null;
         }
 
