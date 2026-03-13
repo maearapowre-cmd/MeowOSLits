@@ -1,5 +1,5 @@
 #!/bin/bash
-# MeowOS Arch – kompletní instalace včetně Python kódu
+# MeowOS Arch – kompletní instalace s rozšířeným Nastavením
 # Autor: Jakub (s asistencí AI)
 
 set -e
@@ -17,8 +17,11 @@ echo "🐧 Vytvářím hlavní soubor app.py (toto může chvíli trvat)..."
 cat > app.py << 'EOF'
 #!/usr/bin/env python3
 """
-MeowOS Arch – kompletní desktop s plnohodnotným Nastavením
-Všechny funkce včetně změny barev, průhlednosti, síťových nastavení.
+MeowOS Arch – kompletní desktop s rozšířeným Nastavením
+Vlastnosti:
+- vlastní tapeta z URL
+- nastavení průhlednosti a barvy widgetů
+- nastavení výchozí velikosti oken
 """
 
 import os
@@ -40,12 +43,15 @@ DEFAULT_CONFIG = {
     'username': 'Jakub',
     'wallpaper': 'linear-gradient(145deg, #0f172a, #1e293b)',
     'primary_color': '#4facfe',
-    'theme': 'dark',          # 'dark' nebo 'light'
-    'window_opacity': 0.7,
+    'widget_bg_color': '#0f192a',        # základní barva widgetů (tmavě modrá)
+    'widget_opacity': 0.8,                # průhlednost widgetů (0-1)
+    'theme': 'dark',
     'font_size': '14px',
     'avatar': 'user-astronaut',
     'wifi_enabled': True,
-    'volume': 80
+    'volume': 80,
+    'default_window_width': 600,
+    'default_window_height': 400
 }
 
 def load_config():
@@ -126,7 +132,7 @@ def get_system_info():
     }
 
 # ============================================================================
-# HTML šablona (kompletní s CSS proměnnými)
+# HTML šablona
 # ============================================================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -147,10 +153,13 @@ HTML_TEMPLATE = """
         :root {
             --wallpaper: {{ wallpaper }};
             --primary: {{ primary_color }};
-            --bg-dark: {% if theme == 'dark' %}rgba(15, 25, 45, {{ window_opacity }}){% else %}rgba(240, 240, 255, {{ window_opacity }}){% endif %};
+            --widget-bg: {{ widget_bg_color }};
+            --widget-opacity: {{ widget_opacity }};
+            --theme: {{ theme }};
             --text-color: {% if theme == 'dark' %}white{% else %}black{% endif %};
             --font-size: {{ font_size }};
-            --window-opacity: {{ window_opacity }};
+            --default-win-width: {{ default_window_width }}px;
+            --default-win-height: {{ default_window_height }}px;
         }
 
         body {
@@ -177,9 +186,11 @@ HTML_TEMPLATE = """
         /* ========================= OKNA ========================= */
         .window {
             position: absolute;
-            min-width: 400px;
-            min-height: 300px;
-            background: var(--bg-dark);
+            min-width: 300px;
+            min-height: 200px;
+            width: var(--default-win-width);
+            height: var(--default-win-height);
+            background: color-mix(in srgb, var(--widget-bg) calc(var(--widget-opacity) * 100%), transparent);
             backdrop-filter: blur(15px);
             -webkit-backdrop-filter: blur(15px);
             border: 1px solid rgba(255,255,255,0.1);
@@ -189,6 +200,8 @@ HTML_TEMPLATE = """
             flex-direction: column;
             z-index: 10;
             color: var(--text-color);
+            resize: both;
+            overflow: auto;
         }
         .window.maximized {
             width: 100% !important;
@@ -196,12 +209,13 @@ HTML_TEMPLATE = """
             top: 0 !important;
             left: 0 !important;
             border-radius: 0;
+            resize: none;
         }
         .window.minimized {
             display: none !important;
         }
         .window-header {
-            background: rgba(20, 30, 50, 0.8);
+            background: color-mix(in srgb, var(--widget-bg) 90%, black);
             padding: 8px 12px;
             border-radius: 12px 12px 0 0;
             display: flex;
@@ -210,6 +224,9 @@ HTML_TEMPLATE = """
             cursor: grab;
             user-select: none;
             border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .window-header:active {
+            cursor: grabbing;
         }
         .window-title {
             color: var(--text-color);
@@ -256,7 +273,7 @@ HTML_TEMPLATE = """
             left: 0;
             width: 100%;
             height: 48px;
-            background: rgba(10, 15, 25, 0.7);
+            background: color-mix(in srgb, var(--widget-bg) calc(var(--widget-opacity) * 100%), transparent);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
             border-top: 1px solid rgba(255,255,255,0.1);
@@ -310,7 +327,7 @@ HTML_TEMPLATE = """
             left: 50%;
             transform: translateX(-50%);
             width: 520px;
-            background: rgba(15, 20, 30, 0.8);
+            background: color-mix(in srgb, var(--widget-bg) calc(var(--widget-opacity) * 100%), transparent);
             backdrop-filter: blur(30px);
             -webkit-backdrop-filter: blur(30px);
             border-radius: 20px;
@@ -375,7 +392,7 @@ HTML_TEMPLATE = """
             gap: 6px;
             padding: 12px 6px;
             border-radius: 10px;
-            background: rgba(255,255,255,0.05);
+            background: color-mix(in srgb, var(--widget-bg) calc(var(--widget-opacity) * 100%), transparent);
             backdrop-filter: blur(5px);
             border: 1px solid rgba(255,255,255,0.1);
             cursor: pointer;
@@ -524,6 +541,8 @@ HTML_TEMPLATE = """
             border-radius: 6px;
             cursor: pointer;
             border: 2px solid transparent;
+            background-size: cover;
+            background-position: center;
         }
         .wallpaper-option:hover {
             border-color: white;
@@ -540,6 +559,14 @@ HTML_TEMPLATE = """
         .slider {
             width: 100%;
             margin: 10px 0;
+        }
+        .url-input {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .url-input input {
+            flex: 1;
         }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -609,15 +636,20 @@ HTML_TEMPLATE = """
         updateWifi();
 
         // ========================= SPRÁVA OKEN =========================
-        function createWindow(title, contentHtml, width = 550, height = 400, x = 100, y = 100) {
+        function createWindow(title, contentHtml, width = null, height = null, x = 100, y = 100) {
             const id = 'win_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
             const desktop = document.getElementById('desktop');
+
+            // Použijeme výchozí velikost z CSS proměnných, pokud není zadána
+            const style = getComputedStyle(document.body);
+            const defaultWidth = parseInt(style.getPropertyValue('--default-win-width')) || 600;
+            const defaultHeight = parseInt(style.getPropertyValue('--default-win-height')) || 400;
 
             const winDiv = document.createElement('div');
             winDiv.className = 'window';
             winDiv.id = id;
-            winDiv.style.width = width + 'px';
-            winDiv.style.height = height + 'px';
+            winDiv.style.width = (width || defaultWidth) + 'px';
+            winDiv.style.height = (height || defaultHeight) + 'px';
             winDiv.style.left = x + 'px';
             winDiv.style.top = y + 'px';
             winDiv.style.zIndex = ++zIndexCounter;
@@ -719,7 +751,7 @@ HTML_TEMPLATE = """
                         </div>
                     </div>
                 </div>
-            `, 650, 400, 120, 80);
+            `, null, null, 120, 80);
         }
 
         function openThisPC() {
@@ -743,7 +775,7 @@ HTML_TEMPLATE = """
                         `;
                     });
                     html += '</div>';
-                    createWindow('Tento počítač', html, 500, 300, 180, 120);
+                    createWindow('Tento počítač', html, null, null, 180, 120);
                 });
         }
 
@@ -758,7 +790,7 @@ HTML_TEMPLATE = """
                     </div>
                 </div>
             `;
-            const winId = createWindow('Terminál', content, 600, 380, 200, 150);
+            const winId = createWindow('Terminál', content, null, null, 200, 150);
             setTimeout(() => {
                 const input = document.getElementById(`${termId}-input`);
                 const output = document.getElementById(`${termId}-output`);
@@ -884,7 +916,7 @@ HTML_TEMPLATE = """
             else if (app === 'videos') createWindow('Videa', '<div style="padding:20px; text-align:center;">Přehrávač videí (demo)</div>', 400, 300, 200, 150);
         }
 
-        // ========================= NASTAVENÍ (PLNĚ FUNKČNÍ) =========================
+        // ========================= NASTAVENÍ (ROZŠÍŘENÉ) =========================
         function openSettings() {
             fetch('/api/system-info')
                 .then(r => r.json())
@@ -894,6 +926,7 @@ HTML_TEMPLATE = """
                         <div>
                             <div class="settings-tabs">
                                 <div class="settings-tab active" onclick="showSettingsTab('vzhled')">Vzhled</div>
+                                <div class="settings-tab" onclick="showSettingsTab('okna')">Okna</div>
                                 <div class="settings-tab" onclick="showSettingsTab('system')">Systém</div>
                                 <div class="settings-tab" onclick="showSettingsTab('uzivatele')">Uživatelé</div>
                                 <div class="settings-tab" onclick="showSettingsTab('sit')">Síť</div>
@@ -911,33 +944,55 @@ HTML_TEMPLATE = """
                                         <div class="wallpaper-option" style="background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=200') center/cover;" onclick="changeWallpaper('url(https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800)')"></div>
                                         <div class="wallpaper-option" style="background: url('https://images.unsplash.com/photo-1510798831971-661eb04b3739?w=200') center/cover;" onclick="changeWallpaper('url(https://images.unsplash.com/photo-1510798831971-661eb04b3739?w=800)')"></div>
                                     </div>
+                                    <div class="url-input">
+                                        <input type="text" id="wallpaper-url" placeholder="Nebo zadej URL obrázku...">
+                                        <button class="settings-btn" onclick="setWallpaperFromUrl()">Nastavit</button>
+                                    </div>
                                 </div>
                                 <div class="settings-row">
                                     <div class="settings-label">Primární barva</div>
                                     <div>
-                                        <span class="color-preview" style="background: #4facfe;"></span>
-                                        <input type="color" id="primary-color" value="#4facfe" onchange="changePrimaryColor(this.value)">
+                                        <span class="color-preview" style="background: var(--primary);"></span>
+                                        <input type="color" id="primary-color" value="{{ primary_color }}" onchange="changePrimaryColor(this.value)">
                                     </div>
+                                </div>
+                                <div class="settings-row">
+                                    <div class="settings-label">Barva widgetů</div>
+                                    <div>
+                                        <span class="color-preview" style="background: var(--widget-bg);"></span>
+                                        <input type="color" id="widget-bg-color" value="{{ widget_bg_color }}" onchange="changeWidgetBgColor(this.value)">
+                                    </div>
+                                </div>
+                                <div class="settings-row">
+                                    <div class="settings-label">Průhlednost widgetů (${Math.round({{ widget_opacity }}*100)}%)</div>
+                                    <input type="range" min="0.3" max="1" step="0.05" value="{{ widget_opacity }}" class="slider" id="widget-opacity-slider" oninput="changeWidgetOpacity(this.value)">
                                 </div>
                                 <div class="settings-row">
                                     <div class="settings-label">Barevný režim</div>
                                     <select class="settings-select" id="theme-select" onchange="changeTheme(this.value)">
-                                        <option value="dark" ${getConfig('theme')=='dark'?'selected':''}>Tmavý</option>
-                                        <option value="light" ${getConfig('theme')=='light'?'selected':''}>Světlý</option>
+                                        <option value="dark" {{ 'selected' if theme=='dark' else '' }}>Tmavý</option>
+                                        <option value="light" {{ 'selected' if theme=='light' else '' }}>Světlý</option>
                                     </select>
-                                </div>
-                                <div class="settings-row">
-                                    <div class="settings-label">Průhlednost oken (${Math.round(getConfig('window_opacity')*100)}%)</div>
-                                    <input type="range" min="0.3" max="1" step="0.05" value="${getConfig('window_opacity')}" class="slider" id="opacity-slider" oninput="changeOpacity(this.value)">
                                 </div>
                                 <div class="settings-row">
                                     <div class="settings-label">Velikost písma</div>
                                     <select class="settings-select" id="font-size" onchange="changeFontSize(this.value)">
-                                        <option value="12px" ${getConfig('font_size')=='12px'?'selected':''}>Malá</option>
-                                        <option value="14px" ${getConfig('font_size')=='14px'?'selected':''}>Střední</option>
-                                        <option value="16px" ${getConfig('font_size')=='16px'?'selected':''}>Velká</option>
+                                        <option value="12px" {{ 'selected' if font_size=='12px' else '' }}>Malá</option>
+                                        <option value="14px" {{ 'selected' if font_size=='14px' else '' }}>Střední</option>
+                                        <option value="16px" {{ 'selected' if font_size=='16px' else '' }}>Velká</option>
                                     </select>
                                 </div>
+                            </div>
+                            <div id="settings-okna" class="settings-panel">
+                                <div class="settings-row">
+                                    <div class="settings-label">Výchozí šířka oken (px)</div>
+                                    <input type="number" class="settings-input" id="win-width" value="{{ default_window_width }}" min="300" max="1200">
+                                </div>
+                                <div class="settings-row">
+                                    <div class="settings-label">Výchozí výška oken (px)</div>
+                                    <input type="number" class="settings-input" id="win-height" value="{{ default_window_height }}" min="200" max="900">
+                                </div>
+                                <button class="settings-btn" onclick="saveWindowSize()">Uložit velikost</button>
                             </div>
                             <div id="settings-system" class="settings-panel">
                                 <div class="settings-row">
@@ -989,7 +1044,7 @@ HTML_TEMPLATE = """
                             <div id="settings-sit" class="settings-panel">
                                 <div class="settings-row">
                                     <div class="settings-label">Wi-Fi</div>
-                                    <label><input type="checkbox" id="wifi-checkbox" ${getConfig('wifi_enabled')?'checked':''} onchange="toggleWifi(this.checked)"> Povolit Wi-Fi</label>
+                                    <label><input type="checkbox" id="wifi-checkbox" {{ 'checked' if wifi_enabled else '' }} onchange="toggleWifi(this.checked)"> Povolit Wi-Fi</label>
                                 </div>
                                 <div class="settings-row">
                                     <div class="settings-label">IP adresy</div>
@@ -998,8 +1053,8 @@ HTML_TEMPLATE = """
                             </div>
                             <div id="settings-zvuk" class="settings-panel">
                                 <div class="settings-row">
-                                    <div class="settings-label">Hlasitost (${getConfig('volume')}%)</div>
-                                    <input type="range" min="0" max="100" value="${getConfig('volume')}" class="slider" id="volume-slider" oninput="changeVolume(this.value)">
+                                    <div class="settings-label">Hlasitost (${volume}%)</div>
+                                    <input type="range" min="0" max="100" value="${volume}" class="slider" id="volume-slider" oninput="changeVolume(this.value)">
                                 </div>
                             </div>
                             <div id="settings-napajeni" class="settings-panel">
@@ -1012,17 +1067,17 @@ HTML_TEMPLATE = """
                                 <div style="text-align:center;">
                                     <i class="fa-brands fa-linux" style="font-size: 64px;"></i>
                                     <h3>MeowOS Arch</h3>
-                                    <p>Verze 2.0</p>
+                                    <p>Verze 3.0</p>
                                     <p>Kompletní desktopové prostředí pro RPi Zero 2W</p>
                                     <p>Vytvořeno v Python + Flask</p>
                                 </div>
                             </div>
                         </div>
                     `;
-                    const winId = createWindow('Nastavení', content, 700, 500, 150, 80);
+                    const winId = createWindow('Nastavení', content, 750, 550, 150, 80);
                     setTimeout(() => {
                         document.getElementById('theme-select')?.addEventListener('change', (e) => changeTheme(e.target.value));
-                        document.getElementById('opacity-slider')?.addEventListener('input', (e) => changeOpacity(e.target.value));
+                        document.getElementById('widget-opacity-slider')?.addEventListener('input', (e) => changeWidgetOpacity(e.target.value));
                         document.getElementById('font-size')?.addEventListener('change', (e) => changeFontSize(e.target.value));
                         document.getElementById('avatar-select')?.addEventListener('change', (e) => changeAvatar(e.target.value));
                     }, 100);
@@ -1031,17 +1086,11 @@ HTML_TEMPLATE = """
 
         function getConfig(key) {
             const style = getComputedStyle(document.body);
-            if (key === 'window_opacity') {
-                const bg = style.getPropertyValue('--bg-dark').match(/rgba?\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)/);
-                return bg ? parseFloat(bg[4]) : 0.7;
-            }
-            if (key === 'theme') {
-                return style.getPropertyValue('--text-color').includes('white') ? 'dark' : 'light';
-            }
+            if (key === 'widget_opacity') return parseFloat(style.getPropertyValue('--widget-opacity')) || 0.8;
+            if (key === 'theme') return style.getPropertyValue('--theme') || 'dark';
             if (key === 'font_size') return style.getPropertyValue('--font-size');
             if (key === 'primary_color') return style.getPropertyValue('--primary');
-            if (key === 'wifi_enabled') return true;  // zjednodušeno
-            if (key === 'volume') return 80;          // zjednodušeno
+            if (key === 'widget_bg_color') return style.getPropertyValue('--widget-bg');
             return null;
         }
 
@@ -1057,28 +1106,33 @@ HTML_TEMPLATE = """
             fetch('/api/set-wallpaper', { method: 'POST', body: 'wallpaper=' + encodeURIComponent(value), headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
         };
 
+        window.setWallpaperFromUrl = function() {
+            const url = document.getElementById('wallpaper-url').value;
+            if (url) {
+                changeWallpaper("url('" + url + "')");
+            }
+        };
+
         window.changePrimaryColor = function(value) {
             document.body.style.setProperty('--primary', value);
             fetch('/api/set-primary', { method: 'POST', body: 'color=' + encodeURIComponent(value), headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
         };
 
-        window.changeTheme = function(value) {
-            const root = document.documentElement;
-            if (value === 'dark') {
-                root.style.setProperty('--text-color', 'white');
-                root.style.setProperty('--bg-dark', `rgba(15, 25, 45, ${getConfig('window_opacity')})`);
-            } else {
-                root.style.setProperty('--text-color', 'black');
-                root.style.setProperty('--bg-dark', `rgba(240, 240, 255, ${getConfig('window_opacity')})`);
-            }
-            fetch('/api/set-theme', { method: 'POST', body: 'theme=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
+        window.changeWidgetBgColor = function(value) {
+            document.body.style.setProperty('--widget-bg', value);
+            fetch('/api/set-widget-bg', { method: 'POST', body: 'color=' + encodeURIComponent(value), headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
         };
 
-        window.changeOpacity = function(value) {
-            const theme = getConfig('theme');
-            const bg = theme === 'dark' ? `rgba(15, 25, 45, ${value})` : `rgba(240, 240, 255, ${value})`;
-            document.body.style.setProperty('--bg-dark', bg);
-            fetch('/api/set-opacity', { method: 'POST', body: 'opacity=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
+        window.changeWidgetOpacity = function(value) {
+            document.body.style.setProperty('--widget-opacity', value);
+            fetch('/api/set-widget-opacity', { method: 'POST', body: 'opacity=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
+        };
+
+        window.changeTheme = function(value) {
+            const root = document.documentElement;
+            root.style.setProperty('--theme', value);
+            root.style.setProperty('--text-color', value === 'dark' ? 'white' : 'black');
+            fetch('/api/set-theme', { method: 'POST', body: 'theme=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
         };
 
         window.changeFontSize = function(value) {
@@ -1099,6 +1153,18 @@ HTML_TEMPLATE = """
             username = newName;
             fetch('/api/set-username', { method: 'POST', body: 'username=' + encodeURIComponent(newName), headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
             fetch('/api/set-avatar', { method: 'POST', body: 'avatar=' + newAvatar, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
+        };
+
+        window.saveWindowSize = function() {
+            const w = document.getElementById('win-width').value;
+            const h = document.getElementById('win-height').value;
+            document.documentElement.style.setProperty('--default-win-width', w + 'px');
+            document.documentElement.style.setProperty('--default-win-height', h + 'px');
+            fetch('/api/set-window-size', {
+                method: 'POST',
+                body: `width=${w}&height=${h}`,
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'}
+            });
         };
 
         window.toggleWifi = function(enabled) {
@@ -1199,6 +1265,20 @@ def api_set_primary():
     save_config(config)
     return 'OK'
 
+@app.route('/api/set-widget-bg', methods=['POST'])
+def api_set_widget_bg():
+    config = load_config()
+    config['widget_bg_color'] = request.form.get('color', '#0f192a')
+    save_config(config)
+    return 'OK'
+
+@app.route('/api/set-widget-opacity', methods=['POST'])
+def api_set_widget_opacity():
+    config = load_config()
+    config['widget_opacity'] = float(request.form.get('opacity', 0.8))
+    save_config(config)
+    return 'OK'
+
 @app.route('/api/set-theme', methods=['POST'])
 def api_set_theme():
     config = load_config()
@@ -1206,17 +1286,18 @@ def api_set_theme():
     save_config(config)
     return 'OK'
 
-@app.route('/api/set-opacity', methods=['POST'])
-def api_set_opacity():
-    config = load_config()
-    config['window_opacity'] = float(request.form.get('opacity', 0.7))
-    save_config(config)
-    return 'OK'
-
 @app.route('/api/set-fontsize', methods=['POST'])
 def api_set_fontsize():
     config = load_config()
     config['font_size'] = request.form.get('size', '14px')
+    save_config(config)
+    return 'OK'
+
+@app.route('/api/set-window-size', methods=['POST'])
+def api_set_window_size():
+    config = load_config()
+    config['default_window_width'] = int(request.form.get('width', 600))
+    config['default_window_height'] = int(request.form.get('height', 400))
     save_config(config)
     return 'OK'
 
