@@ -5,19 +5,25 @@
 #include <time.h>
 #include <string.h>
 
-// ============================================================================
-// Struktura pro aplikaci
-// ============================================================================
+// Struktura pro hlavní aplikaci
 typedef struct {
     GtkWidget *window;
-    GtkWidget *topbar;
-    GtkWidget *dock;
     GtkWidget *clock_label;
     guint clock_timeout;
 } MeowOS;
 
+// Deklarace funkcí (aby je kompilátor viděl)
+gboolean update_clock(gpointer data);
+gboolean update_clock_label(gpointer data);
+void open_terminal(GtkWidget *widget, gpointer data);
+void open_clock(GtkWidget *widget, gpointer data);
+void open_settings(GtkWidget *widget, gpointer data);
+void open_file_manager(GtkWidget *widget, gpointer data);
+void show_about_dialog(GtkWidget *widget, gpointer data);
+void quit_application(GtkWidget *widget, gpointer data);
+
 // ============================================================================
-// Funkce pro aktualizaci hodin
+// Funkce pro aktualizaci hodin v horní liště
 // ============================================================================
 gboolean update_clock(gpointer data) {
     MeowOS *os = (MeowOS *)data;
@@ -33,7 +39,7 @@ gboolean update_clock(gpointer data) {
 }
 
 // ============================================================================
-// Funkce pro aktualizaci labelu v hodinách (pro okno Hodiny)
+// Funkce pro aktualizaci labelu v okně Hodiny
 // ============================================================================
 gboolean update_clock_label(gpointer data) {
     GtkWidget *label = GTK_WIDGET(data);
@@ -62,19 +68,17 @@ void open_terminal(GtkWidget *widget, gpointer data) {
     gtk_container_add(GTK_CONTAINER(term_window), GTK_WIDGET(terminal));
 
     // Spuštění shellu
-    gchar **envp = g_get_environ();
-    const gchar *shell = g_environ_getenv(envp, "SHELL");
+    const gchar *shell = g_getenv("SHELL");
     if (!shell) shell = "/bin/bash";
 
     vte_terminal_spawn_async(terminal,
                              VTE_PTY_DEFAULT,
-                             NULL,          // working directory
+                             NULL,
                              (char *[]){ (char *)shell, NULL },
-                             NULL,          // environment
+                             NULL,
                              G_SPAWN_SEARCH_PATH,
                              NULL, NULL, NULL,
                              -1, NULL, NULL, NULL);
-    g_strfreev(envp);
 
     gtk_widget_show_all(term_window);
 }
@@ -91,7 +95,6 @@ void open_clock(GtkWidget *widget, gpointer data) {
     gtk_label_set_markup(GTK_LABEL(label), "<span font='40' foreground='white'>00:00:00</span>");
     gtk_container_add(GTK_CONTAINER(clock_window), label);
 
-    // Aktualizace času
     g_timeout_add_seconds(1, update_clock_label, label);
     update_clock_label(label);
 
@@ -154,7 +157,7 @@ GtkWidget *create_topbar(MeowOS *os) {
     gtk_menu_button_set_label(GTK_MENU_BUTTON(menu_btn), "🐱");
     gtk_widget_set_name(menu_btn, "menu-button");
 
-    // Menu
+    // Vytvoření menu
     GtkWidget *menu = gtk_menu_new();
     GtkWidget *about_item = gtk_menu_item_new_with_label("O aplikaci");
     g_signal_connect(about_item, "activate", G_CALLBACK(show_about_dialog), os->window);
@@ -170,13 +173,14 @@ GtkWidget *create_topbar(MeowOS *os) {
     gtk_menu_button_set_popup(GTK_MENU_BUTTON(menu_btn), GTK_WIDGET(menu));
     gtk_box_pack_start(GTK_BOX(topbar), menu_btn, FALSE, FALSE, 5);
 
-    // Hodiny uprostřed – použijeme expand a centrování
+    // Hodiny – umístění doprostřed
     os->clock_label = gtk_label_new(NULL);
     update_clock(os);
     os->clock_timeout = g_timeout_add_seconds(1, update_clock, os);
     gtk_box_pack_start(GTK_BOX(topbar), os->clock_label, TRUE, TRUE, 0);
+    gtk_widget_set_halign(os->clock_label, GTK_ALIGN_CENTER);
 
-    // Systémové ikony (placeholder)
+    // Systémové ikony vpravo
     GtkWidget *wifi_icon = gtk_image_new_from_icon_name("network-wireless-symbolic", GTK_ICON_SIZE_MENU);
     GtkWidget *battery_icon = gtk_image_new_from_icon_name("battery-good-symbolic", GTK_ICON_SIZE_MENU);
     GtkWidget *right_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
@@ -196,7 +200,7 @@ GtkWidget *create_dock(MeowOS *os) {
     gtk_widget_set_halign(dock, GTK_ALIGN_CENTER);
     gtk_widget_set_valign(dock, GTK_ALIGN_END);
 
-    // Tlačítka
+    // Tlačítka aplikací
     GtkWidget *term_btn = gtk_button_new_with_label("Term");
     g_signal_connect(term_btn, "clicked", G_CALLBACK(open_terminal), NULL);
     gtk_box_pack_start(GTK_BOX(dock), term_btn, FALSE, FALSE, 5);
@@ -224,30 +228,30 @@ int main(int argc, char *argv[]) {
 
     MeowOS *os = g_malloc(sizeof(MeowOS));
 
-    // Hlavní okno (fullscreen)
+    // Hlavní okno – celá obrazovka
     os->window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(os->window), "MeowOS");
     gtk_window_fullscreen(GTK_WINDOW(os->window));
     g_signal_connect(os->window, "destroy", G_CALLBACK(quit_application), os);
 
-    // Hlavní vertikální box
+    // Hlavní vertikální kontejner
     GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_container_add(GTK_CONTAINER(os->window), vbox);
 
     // Horní lišta
-    os->topbar = create_topbar(os);
-    gtk_box_pack_start(GTK_BOX(vbox), os->topbar, FALSE, FALSE, 0);
+    GtkWidget *topbar = create_topbar(os);
+    gtk_box_pack_start(GTK_BOX(vbox), topbar, FALSE, FALSE, 0);
 
-    // Plocha (zatím jen prázdná)
+    // Plocha (prázdná, jen pozadí)
     GtkWidget *desktop = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_widget_set_name(desktop, "desktop");
     gtk_box_pack_start(GTK_BOX(vbox), desktop, TRUE, TRUE, 0);
 
     // Dock
-    os->dock = create_dock(os);
-    gtk_box_pack_start(GTK_BOX(vbox), os->dock, FALSE, FALSE, 0);
+    GtkWidget *dock = create_dock(os);
+    gtk_box_pack_start(GTK_BOX(vbox), dock, FALSE, FALSE, 0);
 
-    // CSS styly (glass efekt)
+    // CSS styly pro glass efekt
     GtkCssProvider *provider = gtk_css_provider_new();
     gtk_css_provider_load_from_data(provider,
         "#topbar {"
