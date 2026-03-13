@@ -12,7 +12,7 @@ typedef struct {
     guint clock_timeout;
 } MeowOS;
 
-// Deklarace funkcí (aby je kompilátor viděl)
+// Deklarace funkcí
 gboolean update_clock(gpointer data);
 gboolean update_clock_label(gpointer data);
 void open_terminal(GtkWidget *widget, gpointer data);
@@ -21,6 +21,7 @@ void open_settings(GtkWidget *widget, gpointer data);
 void open_file_manager(GtkWidget *widget, gpointer data);
 void show_about_dialog(GtkWidget *widget, gpointer data);
 void quit_application(GtkWidget *widget, gpointer data);
+void show_menu(GtkWidget *widget, gpointer data);
 
 // ============================================================================
 // Funkce pro aktualizaci hodin v horní liště
@@ -67,7 +68,6 @@ void open_terminal(GtkWidget *widget, gpointer data) {
     VteTerminal *terminal = VTE_TERMINAL(vte_terminal_new());
     gtk_container_add(GTK_CONTAINER(term_window), GTK_WIDGET(terminal));
 
-    // Spuštění shellu
     const gchar *shell = g_getenv("SHELL");
     if (!shell) shell = "/bin/bash";
 
@@ -136,6 +136,26 @@ void show_about_dialog(GtkWidget *widget, gpointer data) {
 }
 
 // ============================================================================
+// Zobrazení menu při kliknutí na tlačítko
+// ============================================================================
+void show_menu(GtkWidget *widget, gpointer data) {
+    GtkWidget *menu = gtk_menu_new();
+    GtkWidget *about_item = gtk_menu_item_new_with_label("O aplikaci");
+    g_signal_connect(about_item, "activate", G_CALLBACK(show_about_dialog), data);
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu), about_item);
+
+    GtkWidget *separator = gtk_separator_menu_item_new();
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu), separator);
+
+    GtkWidget *quit_item = gtk_menu_item_new_with_label("Konec");
+    g_signal_connect(quit_item, "activate", G_CALLBACK(quit_application), data);
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu), quit_item);
+
+    gtk_widget_show_all(menu);
+    gtk_menu_popup(GTK_MENU(menu), NULL, NULL, NULL, NULL, 0, gtk_get_current_event_time());
+}
+
+// ============================================================================
 // Ukončení aplikace
 // ============================================================================
 void quit_application(GtkWidget *widget, gpointer data) {
@@ -146,31 +166,16 @@ void quit_application(GtkWidget *widget, gpointer data) {
 }
 
 // ============================================================================
-// Vytvoření horní lišty s menu
+// Vytvoření horní lišty s menu (kompatibilní se staršími GTK)
 // ============================================================================
 GtkWidget *create_topbar(MeowOS *os) {
     GtkWidget *topbar = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
     gtk_widget_set_name(topbar, "topbar");
 
-    // Menu tlačítko (logo)
-    GtkWidget *menu_btn = gtk_menu_button_new();
-    gtk_menu_button_set_label(GTK_MENU_BUTTON(menu_btn), "🐱");
+    // Tlačítko menu (logo) – obyčejné tlačítko, které otevře menu
+    GtkWidget *menu_btn = gtk_button_new_with_label("🐱");
     gtk_widget_set_name(menu_btn, "menu-button");
-
-    // Vytvoření menu
-    GtkWidget *menu = gtk_menu_new();
-    GtkWidget *about_item = gtk_menu_item_new_with_label("O aplikaci");
-    g_signal_connect(about_item, "activate", G_CALLBACK(show_about_dialog), os->window);
-    gtk_menu_shell_append(GTK_MENU_SHELL(menu), about_item);
-
-    GtkWidget *separator = gtk_separator_menu_item_new();
-    gtk_menu_shell_append(GTK_MENU_SHELL(menu), separator);
-
-    GtkWidget *quit_item = gtk_menu_item_new_with_label("Konec");
-    g_signal_connect(quit_item, "activate", G_CALLBACK(quit_application), os);
-    gtk_menu_shell_append(GTK_MENU_SHELL(menu), quit_item);
-
-    gtk_menu_button_set_popup(GTK_MENU_BUTTON(menu_btn), GTK_WIDGET(menu));
+    g_signal_connect(menu_btn, "clicked", G_CALLBACK(show_menu), os);
     gtk_box_pack_start(GTK_BOX(topbar), menu_btn, FALSE, FALSE, 5);
 
     // Hodiny – umístění doprostřed
@@ -200,7 +205,6 @@ GtkWidget *create_dock(MeowOS *os) {
     gtk_widget_set_halign(dock, GTK_ALIGN_CENTER);
     gtk_widget_set_valign(dock, GTK_ALIGN_END);
 
-    // Tlačítka aplikací
     GtkWidget *term_btn = gtk_button_new_with_label("Term");
     g_signal_connect(term_btn, "clicked", G_CALLBACK(open_terminal), NULL);
     gtk_box_pack_start(GTK_BOX(dock), term_btn, FALSE, FALSE, 5);
@@ -228,30 +232,25 @@ int main(int argc, char *argv[]) {
 
     MeowOS *os = g_malloc(sizeof(MeowOS));
 
-    // Hlavní okno – celá obrazovka
     os->window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(os->window), "MeowOS");
     gtk_window_fullscreen(GTK_WINDOW(os->window));
     g_signal_connect(os->window, "destroy", G_CALLBACK(quit_application), os);
 
-    // Hlavní vertikální kontejner
     GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_container_add(GTK_CONTAINER(os->window), vbox);
 
-    // Horní lišta
     GtkWidget *topbar = create_topbar(os);
     gtk_box_pack_start(GTK_BOX(vbox), topbar, FALSE, FALSE, 0);
 
-    // Plocha (prázdná, jen pozadí)
     GtkWidget *desktop = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
     gtk_widget_set_name(desktop, "desktop");
     gtk_box_pack_start(GTK_BOX(vbox), desktop, TRUE, TRUE, 0);
 
-    // Dock
     GtkWidget *dock = create_dock(os);
     gtk_box_pack_start(GTK_BOX(vbox), dock, FALSE, FALSE, 0);
 
-    // CSS styly pro glass efekt
+    // CSS styly
     GtkCssProvider *provider = gtk_css_provider_new();
     gtk_css_provider_load_from_data(provider,
         "#topbar {"
