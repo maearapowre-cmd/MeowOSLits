@@ -1,0 +1,6 @@
+just:
+chmod +x install.sh
+./install.sh
+
+
+language: czech
