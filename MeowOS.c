@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
+#include <string.h>
 
 // ============================================================================
 // Struktura pro aplikaci
@@ -32,6 +33,24 @@ gboolean update_clock(gpointer data) {
 }
 
 // ============================================================================
+// Funkce pro aktualizaci labelu v hodinách (pro okno Hodiny)
+// ============================================================================
+gboolean update_clock_label(gpointer data) {
+    GtkWidget *label = GTK_WIDGET(data);
+    time_t rawtime;
+    struct tm *timeinfo;
+    char buffer[64];
+    char markup[128];
+
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+    strftime(buffer, sizeof(buffer), "%H:%M:%S", timeinfo);
+    snprintf(markup, sizeof(markup), "<span font='40' foreground='white'>%s</span>", buffer);
+    gtk_label_set_markup(GTK_LABEL(label), markup);
+    return G_SOURCE_CONTINUE;
+}
+
+// ============================================================================
 // Aplikace: Terminál
 // ============================================================================
 void open_terminal(GtkWidget *widget, gpointer data) {
@@ -44,17 +63,17 @@ void open_terminal(GtkWidget *widget, gpointer data) {
 
     // Spuštění shellu
     gchar **envp = g_get_environ();
-    gchar *shell = g_environ_getenv(envp, "SHELL");
-    if (!shell) shell = g_strdup("/bin/bash");
+    const gchar *shell = g_environ_getenv(envp, "SHELL");
+    if (!shell) shell = "/bin/bash";
+
     vte_terminal_spawn_async(terminal,
                              VTE_PTY_DEFAULT,
                              NULL,          // working directory
-                             (char *[]){shell, NULL},
+                             (char *[]){ (char *)shell, NULL },
                              NULL,          // environment
                              G_SPAWN_SEARCH_PATH,
                              NULL, NULL, NULL,
                              -1, NULL, NULL, NULL);
-    g_free(shell);
     g_strfreev(envp);
 
     gtk_widget_show_all(term_window);
@@ -73,25 +92,10 @@ void open_clock(GtkWidget *widget, gpointer data) {
     gtk_container_add(GTK_CONTAINER(clock_window), label);
 
     // Aktualizace času
-    g_timeout_add_seconds(1, (GSourceFunc)update_clock_label, label);
+    g_timeout_add_seconds(1, update_clock_label, label);
     update_clock_label(label);
 
     gtk_widget_show_all(clock_window);
-}
-
-gboolean update_clock_label(gpointer data) {
-    GtkWidget *label = GTK_WIDGET(data);
-    time_t rawtime;
-    struct tm *timeinfo;
-    char buffer[64];
-    char markup[128];
-
-    time(&rawtime);
-    timeinfo = localtime(&rawtime);
-    strftime(buffer, sizeof(buffer), "%H:%M:%S", timeinfo);
-    snprintf(markup, sizeof(markup), "<span font='40' foreground='white'>%s</span>", buffer);
-    gtk_label_set_markup(GTK_LABEL(label), markup);
-    return G_SOURCE_CONTINUE;
 }
 
 // ============================================================================
@@ -166,11 +170,11 @@ GtkWidget *create_topbar(MeowOS *os) {
     gtk_menu_button_set_popup(GTK_MENU_BUTTON(menu_btn), GTK_WIDGET(menu));
     gtk_box_pack_start(GTK_BOX(topbar), menu_btn, FALSE, FALSE, 5);
 
-    // Hodiny uprostřed
+    // Hodiny uprostřed – použijeme expand a centrování
     os->clock_label = gtk_label_new(NULL);
     update_clock(os);
     os->clock_timeout = g_timeout_add_seconds(1, update_clock, os);
-    gtk_box_pack_center(GTK_BOX(topbar), os->clock_label);
+    gtk_box_pack_start(GTK_BOX(topbar), os->clock_label, TRUE, TRUE, 0);
 
     // Systémové ikony (placeholder)
     GtkWidget *wifi_icon = gtk_image_new_from_icon_name("network-wireless-symbolic", GTK_ICON_SIZE_MENU);
