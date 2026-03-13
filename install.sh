@@ -1,5 +1,5 @@
 #!/bin/bash
-# MeowOS Arch – finální verze s opraveným Nastavením a prohlížečem
+# MeowOS Arch – Finální Hyprland edice
 # Autor: Jakub (s asistencí AI)
 
 set -e
@@ -17,7 +17,10 @@ echo "🐧 Vytvářím hlavní soubor app.py (může to chvíli trvat)..."
 cat > app.py << 'EOF'
 #!/usr/bin/env python3
 """
-MeowOS Arch – finální verze s opraveným Nastavením a prohlížečem
+MeowOS Arch – Hyprland edice
+- Ostré barvy, vyšší průhlednost, minimalismus.
+- Opravené Nastavení (funkční všechny karty).
+- Vylepšená kalkulačka.
 """
 
 import os
@@ -36,18 +39,18 @@ app = Flask(__name__)
 CONFIG_FILE = os.path.expanduser('~/meowos-arch/config.json')
 
 DEFAULT_CONFIG = {
-    'username': 'Jakub',
-    'wallpaper': 'linear-gradient(145deg, #0f172a, #1e293b)',
-    'primary_color': '#4facfe',
-    'widget_bg_color': '#0f192a',
-    'widget_opacity': 0.8,
+    'username': 'jakub',
+    'wallpaper': 'linear-gradient(145deg, #0f172a, #1e1b2b)',
+    'primary_color': '#c084fc',        # světle fialová jako akcent
+    'widget_bg_color': '#0a0a0f',       # velmi tmavá, téměř černá
+    'widget_opacity': 0.85,
     'theme': 'dark',
-    'font_size': '14px',
+    'font_size': '13px',
     'avatar': 'user-astronaut',
     'wifi_enabled': True,
     'volume': 80,
-    'default_window_width': 600,
-    'default_window_height': 400
+    'default_window_width': 640,
+    'default_window_height': 440
 }
 
 def load_config():
@@ -128,7 +131,7 @@ def get_system_info():
     }
 
 # ============================================================================
-# HTML šablona
+# HTML šablona – Hyprland styl
 # ============================================================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -136,13 +139,13 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MeowOS Arch</title>
+    <title>MeowOS Arch · Hyprland</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Segoe UI', 'Roboto', system-ui, sans-serif;
+            font-family: 'Segoe UI', 'Roboto', 'Inter', system-ui, sans-serif;
         }
 
         :root {
@@ -151,10 +154,13 @@ HTML_TEMPLATE = """
             --widget-bg: {{ widget_bg_color }};
             --widget-opacity: {{ widget_opacity }};
             --theme: {{ theme }};
-            --text-color: {% if theme == 'dark' %}white{% else %}black{% endif %};
+            --text-color: {% if theme == 'dark' %}rgba(255,255,255,0.9){% else %}rgba(0,0,0,0.9){% endif %};
             --font-size: {{ font_size }};
             --default-win-width: {{ default_window_width }}px;
             --default-win-height: {{ default_window_height }}px;
+            --border-radius: 12px;
+            --border-size: 1px;
+            --gap: 8px;
         }
 
         body {
@@ -165,7 +171,6 @@ HTML_TEMPLATE = """
             background-size: cover;
             background-position: center;
             position: relative;
-            transition: background 0.3s, color 0.2s;
             color: var(--text-color);
             font-size: var(--font-size);
         }
@@ -178,6 +183,7 @@ HTML_TEMPLATE = """
             overflow: hidden;
         }
 
+        /* ==================== OKNA ==================== */
         .window {
             position: absolute;
             min-width: 300px;
@@ -185,17 +191,21 @@ HTML_TEMPLATE = """
             width: var(--default-win-width);
             height: var(--default-win-height);
             background: color-mix(in srgb, var(--widget-bg) calc(var(--widget-opacity) * 100%), transparent);
-            backdrop-filter: blur(15px);
-            -webkit-backdrop-filter: blur(15px);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 12px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: var(--border-size) solid rgba(255,255,255,0.1);
+            border-radius: var(--border-radius);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.6);
             display: flex;
             flex-direction: column;
             z-index: 10;
             color: var(--text-color);
             resize: both;
             overflow: auto;
+            transition: box-shadow 0.2s ease;
+        }
+        .window:active {
+            box-shadow: 0 20px 45px rgba(0,0,0,0.8);
         }
         .window.maximized {
             width: 100% !important;
@@ -209,9 +219,9 @@ HTML_TEMPLATE = """
             display: none !important;
         }
         .window-header {
-            background: color-mix(in srgb, var(--widget-bg) 90%, black);
+            background: color-mix(in srgb, var(--widget-bg) 95%, black);
             padding: 8px 12px;
-            border-radius: 12px 12px 0 0;
+            border-radius: var(--border-radius) var(--border-radius) 0 0;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -219,12 +229,9 @@ HTML_TEMPLATE = """
             user-select: none;
             border-bottom: 1px solid rgba(255,255,255,0.1);
         }
-        .window-header:active {
-            cursor: grabbing;
-        }
         .window-title {
-            color: var(--text-color);
-            font-size: 14px;
+            color: var(--primary);
+            font-size: 13px;
             font-weight: 500;
             display: flex;
             align-items: center;
@@ -235,21 +242,21 @@ HTML_TEMPLATE = """
             gap: 8px;
         }
         .window-btn {
-            width: 28px;
-            height: 28px;
+            width: 26px;
+            height: 26px;
             border: none;
             border-radius: 6px;
-            background: rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.05);
             color: var(--text-color);
-            font-size: 14px;
+            font-size: 13px;
             display: flex;
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: 0.2s;
+            transition: 0.15s;
         }
         .window-btn:hover {
-            background: rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.15);
         }
         .close-btn:hover {
             background: #c42b1c !important;
@@ -260,6 +267,7 @@ HTML_TEMPLATE = """
             overflow-y: auto;
         }
 
+        /* ==================== TASKBAR ==================== */
         #taskbar {
             position: fixed;
             bottom: 0;
@@ -267,9 +275,9 @@ HTML_TEMPLATE = """
             width: 100%;
             height: 48px;
             background: color-mix(in srgb, var(--widget-bg) calc(var(--widget-opacity) * 100%), transparent);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border-top: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border-top: var(--border-size) solid rgba(255,255,255,0.1);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -281,7 +289,7 @@ HTML_TEMPLATE = """
             gap: 4px;
             background: rgba(255,255,255,0.03);
             padding: 4px 8px;
-            border-radius: 12px;
+            border-radius: 20px;
         }
         .taskbar-icon {
             width: 40px;
@@ -292,11 +300,12 @@ HTML_TEMPLATE = """
             justify-content: center;
             color: white;
             font-size: 20px;
-            transition: 0.2s;
+            transition: 0.15s;
             cursor: pointer;
         }
         .taskbar-icon:hover {
             background: rgba(255,255,255,0.15);
+            color: var(--primary);
         }
         .taskbar-right {
             position: absolute;
@@ -304,7 +313,7 @@ HTML_TEMPLATE = """
             display: flex;
             gap: 16px;
             color: white;
-            font-size: 14px;
+            font-size: 13px;
             align-items: center;
         }
         .taskbar-time {
@@ -313,17 +322,18 @@ HTML_TEMPLATE = """
             border-radius: 20px;
         }
 
+        /* ==================== START MENU ==================== */
         #start-menu {
             position: fixed;
             bottom: 60px;
             left: 50%;
             transform: translateX(-50%);
-            width: 520px;
+            width: 540px;
             background: color-mix(in srgb, var(--widget-bg) calc(var(--widget-opacity) * 100%), transparent);
-            backdrop-filter: blur(30px);
-            -webkit-backdrop-filter: blur(30px);
+            backdrop-filter: blur(35px);
+            -webkit-backdrop-filter: blur(35px);
             border-radius: 20px;
-            border: 1px solid rgba(255,255,255,0.1);
+            border: var(--border-size) solid rgba(255,255,255,0.1);
             padding: 20px;
             color: white;
             box-shadow: 0 30px 60px rgba(0,0,0,0.8);
@@ -335,10 +345,10 @@ HTML_TEMPLATE = """
         }
         .start-header {
             font-size: 18px;
-            font-weight: 600;
+            font-weight: 500;
             margin-bottom: 20px;
             padding-bottom: 10px;
-            border-bottom: 1px solid rgba(255,255,255,0.2);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
             display: flex;
             align-items: center;
             gap: 10px;
@@ -355,12 +365,13 @@ HTML_TEMPLATE = """
             gap: 6px;
             padding: 12px;
             border-radius: 12px;
-            background: rgba(255,255,255,0.05);
+            background: rgba(255,255,255,0.03);
             cursor: pointer;
-            transition: 0.2s;
+            transition: 0.15s;
         }
         .start-app:hover {
-            background: rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.1);
+            color: var(--primary);
         }
         .start-app i {
             font-size: 24px;
@@ -370,10 +381,11 @@ HTML_TEMPLATE = """
             text-align: center;
         }
 
+        /* ==================== IKONY ==================== */
         .icon-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
-            gap: 16px;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 12px;
             padding: 10px;
         }
         .file-icon {
@@ -381,28 +393,30 @@ HTML_TEMPLATE = """
             flex-direction: column;
             align-items: center;
             gap: 6px;
-            padding: 12px 6px;
+            padding: 10px 4px;
             border-radius: 10px;
-            background: color-mix(in srgb, var(--widget-bg) calc(var(--widget-opacity) * 100%), transparent);
-            backdrop-filter: blur(5px);
-            border: 1px solid rgba(255,255,255,0.1);
+            background: color-mix(in srgb, var(--widget-bg) 50%, transparent);
+            backdrop-filter: blur(8px);
+            border: var(--border-size) solid rgba(255,255,255,0.05);
             cursor: pointer;
-            transition: 0.2s;
+            transition: 0.15s;
             text-align: center;
         }
         .file-icon:hover {
-            background: rgba(255,255,255,0.15);
+            background: rgba(255,255,255,0.1);
+            border-color: var(--primary);
         }
         .file-icon i {
-            font-size: 36px;
-            filter: drop-shadow(0 8px 6px rgba(0,0,0,0.5));
+            font-size: 32px;
+            filter: drop-shadow(0 6px 8px rgba(0,0,0,0.5));
         }
 
+        /* ==================== TERMINÁL ==================== */
         .terminal-container {
             display: flex;
             flex-direction: column;
             height: 100%;
-            background: rgba(0,0,0,0.3);
+            background: rgba(0,0,0,0.4);
             border-radius: 8px;
             font-family: 'Courier New', monospace;
         }
@@ -410,18 +424,18 @@ HTML_TEMPLATE = """
             flex: 1;
             padding: 10px;
             overflow-y: auto;
-            color: #0f0;
+            color: #a5d6ff;
             white-space: pre-wrap;
-            font-size: 14px;
+            font-size: 13px;
         }
         .terminal-input-line {
             display: flex;
             padding: 5px 10px;
-            background: rgba(0,0,0,0.5);
-            border-top: 1px solid #0f0;
+            background: rgba(0,0,0,0.6);
+            border-top: 1px solid #2d2d3a;
         }
         .terminal-prompt {
-            color: #0f0;
+            color: #c084fc;
             margin-right: 8px;
             font-weight: bold;
         }
@@ -429,53 +443,58 @@ HTML_TEMPLATE = """
             flex: 1;
             background: transparent;
             border: none;
-            color: #0f0;
+            color: #a5d6ff;
             font-family: 'Courier New', monospace;
-            font-size: 14px;
+            font-size: 13px;
             outline: none;
         }
 
+        /* ==================== KALKULAČKA ==================== */
         .calculator {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 6px;
-            padding: 10px;
-            background: rgba(0,0,0,0.2);
-            border-radius: 8px;
+            gap: 8px;
+            padding: 12px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
         }
         .calc-display {
             grid-column: span 4;
             background: rgba(0,0,0,0.5);
             color: white;
             text-align: right;
-            padding: 12px;
-            font-size: 24px;
-            border-radius: 6px;
-            margin-bottom: 8px;
+            padding: 15px;
+            font-size: 28px;
+            border-radius: 8px;
+            margin-bottom: 10px;
             font-family: monospace;
         }
         .calc-btn {
-            background: rgba(255,255,255,0.1);
+            background: rgba(255,255,255,0.05);
             border: none;
             color: white;
-            padding: 12px;
-            font-size: 16px;
-            border-radius: 6px;
+            padding: 14px;
+            font-size: 18px;
+            border-radius: 8px;
             cursor: pointer;
+            transition: 0.1s;
         }
         .calc-btn:hover {
-            background: rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.15);
         }
         .calc-btn.operator {
-            background: var(--primary);
-            opacity: 0.7;
+            background: color-mix(in srgb, var(--primary) 30%, transparent);
+        }
+        .calc-btn.operator:hover {
+            background: color-mix(in srgb, var(--primary) 50%, transparent);
         }
 
+        /* ==================== NASTAVENÍ ==================== */
         .settings-tabs {
             display: flex;
             gap: 5px;
             margin-bottom: 20px;
-            border-bottom: 1px solid rgba(255,255,255,0.2);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
             padding-bottom: 10px;
             flex-wrap: wrap;
         }
@@ -483,11 +502,18 @@ HTML_TEMPLATE = """
             padding: 8px 16px;
             border-radius: 20px;
             cursor: pointer;
-            background: rgba(255,255,255,0.05);
+            background: rgba(255,255,255,0.03);
+            transition: 0.15s;
+            border: var(--border-size) solid transparent;
+        }
+        .settings-tab:hover {
+            background: rgba(255,255,255,0.08);
         }
         .settings-tab.active {
             background: var(--primary);
-            opacity: 0.8;
+            color: #0a0a0f;
+            font-weight: 500;
+            border-color: rgba(255,255,255,0.2);
         }
         .settings-panel {
             display: none;
@@ -502,38 +528,42 @@ HTML_TEMPLATE = """
             display: block;
             margin-bottom: 5px;
             opacity: 0.7;
-            font-size: 13px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
         .settings-input, .settings-select {
             width: 100%;
             padding: 8px;
-            background: rgba(0,0,0,0.3);
-            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(0,0,0,0.4);
+            border: var(--border-size) solid rgba(255,255,255,0.1);
             border-radius: 6px;
             color: inherit;
         }
         .settings-btn {
             background: var(--primary);
             border: none;
-            color: white;
+            color: #0a0a0f;
             padding: 8px 16px;
             border-radius: 6px;
             cursor: pointer;
             margin-right: 10px;
+            font-weight: 500;
         }
         .wallpaper-option {
             display: inline-block;
             width: 80px;
             height: 50px;
             margin: 5px;
-            border-radius: 6px;
+            border-radius: 8px;
             cursor: pointer;
             border: 2px solid transparent;
             background-size: cover;
             background-position: center;
+            transition: 0.1s;
         }
         .wallpaper-option:hover {
-            border-color: white;
+            border-color: var(--primary);
         }
         .color-preview {
             width: 30px;
@@ -542,11 +572,12 @@ HTML_TEMPLATE = """
             display: inline-block;
             margin-right: 10px;
             vertical-align: middle;
-            border: 1px solid rgba(255,255,255,0.3);
+            border: 1px solid rgba(255,255,255,0.2);
         }
         .slider {
             width: 100%;
             margin: 10px 0;
+            accent-color: var(--primary);
         }
         .url-input {
             display: flex;
@@ -565,7 +596,7 @@ HTML_TEMPLATE = """
             flex: 1;
             padding: 8px;
             background: rgba(0,0,0,0.3);
-            border: 1px solid rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.1);
             border-radius: 6px;
             color: white;
         }
@@ -573,7 +604,6 @@ HTML_TEMPLATE = """
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
 <body>
-    <!-- Předání konfigurace do JavaScriptu -->
     <script>
         window.meowConfig = {
             username: {{ username|tojson }},
@@ -620,7 +650,7 @@ HTML_TEMPLATE = """
             <div class="start-app" onclick="openCalculator()"><i class="fa-solid fa-calculator"></i><span>Kalkulačka</span></div>
             <div class="start-app" onclick="openThisPC()"><i class="fa-solid fa-computer"></i><span>Tento PC</span></div>
             <div class="start-app" onclick="openBrowserWindow()"><i class="fa-solid fa-globe"></i><span>Prohlížeč</span></div>
-            <div class="start-app" onclick="openApp('store')"><i class="fa-solid fa-store"></i><span>Obchod</span></div>
+            <div class="start-app" onclick="openStore()"><i class="fa-solid fa-store"></i><span>Obchod</span></div>
             <div class="start-app" onclick="openApp('calendar')"><i class="fa-regular fa-calendar"></i><span>Kalendář</span></div>
         </div>
     </div>
@@ -654,8 +684,8 @@ HTML_TEMPLATE = """
             const id = 'win_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
             const desktop = document.getElementById('desktop');
 
-            const defaultWidth = meowConfig.default_window_width || 600;
-            const defaultHeight = meowConfig.default_window_height || 400;
+            const defaultWidth = meowConfig.default_window_width || 640;
+            const defaultHeight = meowConfig.default_window_height || 440;
 
             const winDiv = document.createElement('div');
             winDiv.className = 'window';
@@ -746,11 +776,11 @@ HTML_TEMPLATE = """
             createWindow('Správce souborů', `
                 <div style="display: flex; gap: 15px;">
                     <div style="width: 180px; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px;">
-                        <div style="padding: 8px;"><i class="fa-regular fa-house"></i> Domů</div>
-                        <div style="padding: 8px;"><i class="fa-regular fa-image"></i> Obrázky</div>
-                        <div style="padding: 8px;"><i class="fa-regular fa-file"></i> Dokumenty</div>
-                        <div style="padding: 8px;"><i class="fa-regular fa-music"></i> Hudba</div>
-                        <div style="padding: 8px;"><i class="fa-regular fa-video"></i> Videa</div>
+                        <div style="padding: 6px;"><i class="fa-regular fa-house"></i> Domů</div>
+                        <div style="padding: 6px;"><i class="fa-regular fa-image"></i> Obrázky</div>
+                        <div style="padding: 6px;"><i class="fa-regular fa-file"></i> Dokumenty</div>
+                        <div style="padding: 6px;"><i class="fa-regular fa-music"></i> Hudba</div>
+                        <div style="padding: 6px;"><i class="fa-regular fa-video"></i> Videa</div>
                     </div>
                     <div style="flex:1;">
                         <div class="icon-grid">
@@ -780,8 +810,8 @@ HTML_TEMPLATE = """
                                     <span><i class="fa-regular fa-hard-drive"></i> ${disk.name}</span>
                                     <span>${used} GB / ${total} GB</span>
                                 </div>
-                                <div style="width:100%; height:8px; background: rgba(255,255,255,0.2); border-radius:4px;">
-                                    <div style="width:${disk.percent}%; height:100%; background: linear-gradient(90deg, var(--primary), #00f2fe); border-radius:4px;"></div>
+                                <div style="width:100%; height:6px; background: rgba(255,255,255,0.1); border-radius:3px;">
+                                    <div style="width:${disk.percent}%; height:100%; background: linear-gradient(90deg, var(--primary), #a5d6ff); border-radius:3px;"></div>
                                 </div>
                             </div>
                         `;
@@ -802,7 +832,7 @@ HTML_TEMPLATE = """
                     </div>
                 </div>
             `;
-            const winId = createWindow('Terminál', content, 600, 380, 200, 150);
+            const winId = createWindow('Terminál', content, 620, 400, 200, 150);
             setTimeout(() => {
                 const input = document.getElementById(`${termId}-input`);
                 const output = document.getElementById(`${termId}-output`);
@@ -846,6 +876,7 @@ HTML_TEMPLATE = """
         }
 
         function openCalculator() {
+            // O 15% delší – 300px na 345px, 380px na 437px (zaokrouhleno)
             createWindow('Kalkulačka', `
                 <div class="calculator">
                     <div class="calc-display" id="calc-display">0</div>
@@ -867,7 +898,7 @@ HTML_TEMPLATE = """
                     <button class="calc-btn operator" onclick="calcOperator('+')">+</button>
                     <button class="calc-btn" style="grid-column: span 4;" onclick="calcClear()">C</button>
                 </div>
-            `, 300, 380, 220, 180);
+            `, 300, 437, 220, 180);  // výška 380 → 437 (o 15 % více)
         }
 
         window.calcInput = function(d) {
@@ -899,12 +930,12 @@ HTML_TEMPLATE = """
             createWindow('Prohlížeč', `
                 <div style="padding: 20px;">
                     <div class="browser-input">
-                        <input type="text" id="browser-url" placeholder="Zadejte URL (např. https://seznam.cz)">
+                        <input type="text" id="browser-url" placeholder="Zadejte URL (např. https://archlinux.org)">
                         <button class="settings-btn" onclick="navigateBrowser()">Otevřít</button>
                     </div>
-                    <p style="color: #ccc; font-size: 12px;">Stránka se otevře v novém okně tvého prohlížeče.</p>
+                    <p style="color: #aaa; font-size: 12px;">Stránka se otevře v novém okně tvého prohlížeče.</p>
                 </div>
-            `, 500, 200, 250, 150);
+            `, 520, 200, 250, 150);
         }
 
         window.navigateBrowser = function() {
@@ -918,88 +949,100 @@ HTML_TEMPLATE = """
             }
         };
 
-        function openApp(app) {
-            if (app === 'store') createWindow('Obchod', '<div style="padding:20px; text-align:center;">Obchod s aplikacemi (demo)</div>', 400, 300, 200, 150);
-            else if (app === 'calendar') createWindow('Kalendář', '<div style="padding:20px; text-align:center;">Kalendář (demo)</div>', 400, 300, 200, 150);
+        function openStore() {
+            createWindow('Obchod', `
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+                    <div style="background:rgba(255,255,255,0.03); border-radius:10px; padding:15px; text-align:center;"><i class="fa-brands fa-firefox-browser" style="font-size:32px;"></i><br>Firefox</div>
+                    <div style="background:rgba(255,255,255,0.03); border-radius:10px; padding:15px; text-align:center;"><i class="fa-brands fa-edge" style="font-size:32px;"></i><br>Edge</div>
+                    <div style="background:rgba(255,255,255,0.03); border-radius:10px; padding:15px; text-align:center;"><i class="fa-solid fa-terminal" style="font-size:32px;"></i><br>Terminál</div>
+                    <div style="background:rgba(255,255,255,0.03); border-radius:10px; padding:15px; text-align:center;"><i class="fa-solid fa-calculator" style="font-size:32px;"></i><br>Kalkulačka</div>
+                    <div style="background:rgba(255,255,255,0.03); border-radius:10px; padding:15px; text-align:center;"><i class="fa-regular fa-file" style="font-size:32px;"></i><br>Editor</div>
+                    <div style="background:rgba(255,255,255,0.03); border-radius:10px; padding:15px; text-align:center;"><i class="fa-regular fa-image" style="font-size:32px;"></i><br>Prohlížeč</div>
+                </div>
+            `, 520, 350, 150, 100);
         }
 
-        // ========================= NASTAVENÍ =========================
+        function openApp(app) {
+            if (app === 'calendar') createWindow('Kalendář', '<div style="padding:20px; text-align:center;">Kalendář (demo)</div>', 400, 300, 200, 150);
+        }
+
+        // ========================= NASTAVENÍ (OPRAVENÉ) =========================
         function openSettings() {
             fetch('/api/system-info')
                 .then(r => r.json())
                 .then(info => {
                     const uptime = Math.floor(info.uptime / 3600) + 'h ' + Math.floor((info.uptime % 3600) / 60) + 'm';
                     const content = `
-                        <div>
+                        <div class="settings-container" id="settings-container-${Date.now()}">
                             <div class="settings-tabs">
-                                <div class="settings-tab active" onclick="showSettingsTab('vzhled')">Vzhled</div>
-                                <div class="settings-tab" onclick="showSettingsTab('okna')">Okna</div>
-                                <div class="settings-tab" onclick="showSettingsTab('system')">Systém</div>
-                                <div class="settings-tab" onclick="showSettingsTab('uzivatele')">Uživatelé</div>
-                                <div class="settings-tab" onclick="showSettingsTab('sit')">Síť</div>
-                                <div class="settings-tab" onclick="showSettingsTab('zvuk')">Zvuk</div>
-                                <div class="settings-tab" onclick="showSettingsTab('napajeni')">Napájení</div>
-                                <div class="settings-tab" onclick="showSettingsTab('o-aplikaci')">O aplikaci</div>
+                                <div class="settings-tab active" data-tab="vzhled">Vzhled</div>
+                                <div class="settings-tab" data-tab="okna">Okna</div>
+                                <div class="settings-tab" data-tab="system">Systém</div>
+                                <div class="settings-tab" data-tab="uzivatele">Uživatelé</div>
+                                <div class="settings-tab" data-tab="sit">Síť</div>
+                                <div class="settings-tab" data-tab="zvuk">Zvuk</div>
+                                <div class="settings-tab" data-tab="napajeni">Napájení</div>
+                                <div class="settings-tab" data-tab="o-aplikaci">O aplikaci</div>
                             </div>
                             <div id="settings-vzhled" class="settings-panel active">
                                 <div class="settings-row">
                                     <div class="settings-label">Tapeta</div>
                                     <div>
-                                        <div class="wallpaper-option" style="background: linear-gradient(145deg, #0f172a, #1e293b);" onclick="changeWallpaper('linear-gradient(145deg, #0f172a, #1e293b)')"></div>
-                                        <div class="wallpaper-option" style="background: linear-gradient(145deg, #2d1a3a, #1a2f3f);" onclick="changeWallpaper('linear-gradient(145deg, #2d1a3a, #1a2f3f)')"></div>
-                                        <div class="wallpaper-option" style="background: linear-gradient(145deg, #1a3a2d, #1a2f3f);" onclick="changeWallpaper('linear-gradient(145deg, #1a3a2d, #1a2f3f)')"></div>
-                                        <div class="wallpaper-option" style="background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=200') center/cover;" onclick="changeWallpaper('url(https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800)')"></div>
-                                        <div class="wallpaper-option" style="background: url('https://images.unsplash.com/photo-1510798831971-661eb04b3739?w=200') center/cover;" onclick="changeWallpaper('url(https://images.unsplash.com/photo-1510798831971-661eb04b3739?w=800)')"></div>
+                                        <div class="wallpaper-option" style="background: linear-gradient(145deg, #0f172a, #1e1b2b);" data-wall="linear-gradient(145deg, #0f172a, #1e1b2b)"></div>
+                                        <div class="wallpaper-option" style="background: linear-gradient(145deg, #2d1a3a, #1a1a2f);" data-wall="linear-gradient(145deg, #2d1a3a, #1a1a2f)"></div>
+                                        <div class="wallpaper-option" style="background: linear-gradient(145deg, #1a3a2d, #1a2f3f);" data-wall="linear-gradient(145deg, #1a3a2d, #1a2f3f)"></div>
+                                        <div class="wallpaper-option" style="background: url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=200') center/cover;" data-wall="url(https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800)"></div>
+                                        <div class="wallpaper-option" style="background: url('https://images.unsplash.com/photo-1510798831971-661eb04b3739?w=200') center/cover;" data-wall="url(https://images.unsplash.com/photo-1510798831971-661eb04b3739?w=800)"></div>
                                     </div>
                                     <div class="url-input">
                                         <input type="text" id="wallpaper-url" placeholder="Nebo zadej URL obrázku...">
-                                        <button class="settings-btn" onclick="setWallpaperFromUrl()">Nastavit</button>
+                                        <button class="settings-btn" id="set-wallpaper-url">Nastavit</button>
                                     </div>
                                 </div>
                                 <div class="settings-row">
                                     <div class="settings-label">Primární barva</div>
                                     <div>
                                         <span class="color-preview" style="background: ${meowConfig.primary_color};"></span>
-                                        <input type="color" id="primary-color" value="${meowConfig.primary_color}" onchange="changePrimaryColor(this.value)">
+                                        <input type="color" id="primary-color" value="${meowConfig.primary_color}">
                                     </div>
                                 </div>
                                 <div class="settings-row">
                                     <div class="settings-label">Barva widgetů</div>
                                     <div>
                                         <span class="color-preview" style="background: ${meowConfig.widget_bg_color};"></span>
-                                        <input type="color" id="widget-bg-color" value="${meowConfig.widget_bg_color}" onchange="changeWidgetBgColor(this.value)">
+                                        <input type="color" id="widget-bg-color" value="${meowConfig.widget_bg_color}">
                                     </div>
                                 </div>
                                 <div class="settings-row">
-                                    <div class="settings-label">Průhlednost widgetů (${Math.round(meowConfig.widget_opacity*100)}%)</div>
-                                    <input type="range" min="0.3" max="1" step="0.05" value="${meowConfig.widget_opacity}" class="slider" id="widget-opacity-slider" oninput="changeWidgetOpacity(this.value)">
+                                    <div class="settings-label">Průhlednost (${Math.round(meowConfig.widget_opacity*100)}%)</div>
+                                    <input type="range" min="0.4" max="1" step="0.05" value="${meowConfig.widget_opacity}" class="slider" id="widget-opacity-slider">
                                 </div>
                                 <div class="settings-row">
                                     <div class="settings-label">Barevný režim</div>
-                                    <select class="settings-select" id="theme-select" onchange="changeTheme(this.value)">
+                                    <select class="settings-select" id="theme-select">
                                         <option value="dark" ${meowConfig.theme=='dark'?'selected':''}>Tmavý</option>
                                         <option value="light" ${meowConfig.theme=='light'?'selected':''}>Světlý</option>
                                     </select>
                                 </div>
                                 <div class="settings-row">
                                     <div class="settings-label">Velikost písma</div>
-                                    <select class="settings-select" id="font-size" onchange="changeFontSize(this.value)">
+                                    <select class="settings-select" id="font-size">
                                         <option value="12px" ${meowConfig.font_size=='12px'?'selected':''}>Malá</option>
-                                        <option value="14px" ${meowConfig.font_size=='14px'?'selected':''}>Střední</option>
-                                        <option value="16px" ${meowConfig.font_size=='16px'?'selected':''}>Velká</option>
+                                        <option value="13px" ${meowConfig.font_size=='13px'?'selected':''}>Střední</option>
+                                        <option value="14px" ${meowConfig.font_size=='14px'?'selected':''}>Velká</option>
                                     </select>
                                 </div>
                             </div>
                             <div id="settings-okna" class="settings-panel">
                                 <div class="settings-row">
-                                    <div class="settings-label">Výchozí šířka oken (px)</div>
+                                    <div class="settings-label">Výchozí šířka (px)</div>
                                     <input type="number" class="settings-input" id="win-width" value="${meowConfig.default_window_width}" min="300" max="1200">
                                 </div>
                                 <div class="settings-row">
-                                    <div class="settings-label">Výchozí výška oken (px)</div>
+                                    <div class="settings-label">Výchozí výška (px)</div>
                                     <input type="number" class="settings-input" id="win-height" value="${meowConfig.default_window_height}" min="200" max="900">
                                 </div>
-                                <button class="settings-btn" onclick="saveWindowSize()">Uložit velikost</button>
+                                <button class="settings-btn" id="save-window-size">Uložit velikost</button>
                             </div>
                             <div id="settings-system" class="settings-panel">
                                 <div class="settings-row"><span class="settings-label">Hostname</span> ${info.hostname}</div>
@@ -1023,110 +1066,198 @@ HTML_TEMPLATE = """
                                         <option value="user-secret" ${meowConfig.avatar=='user-secret'?'selected':''}>Tajný</option>
                                     </select>
                                 </div>
-                                <button class="settings-btn" onclick="saveUserSettings()">Uložit</button>
+                                <button class="settings-btn" id="save-user-settings">Uložit</button>
                             </div>
                             <div id="settings-sit" class="settings-panel">
                                 <div class="settings-row">
-                                    <label><input type="checkbox" id="wifi-checkbox" ${meowConfig.wifi_enabled?'checked':''} onchange="toggleWifi(this.checked)"> Povolit Wi-Fi</label>
+                                    <label><input type="checkbox" id="wifi-checkbox" ${meowConfig.wifi_enabled?'checked':''}> Povolit Wi-Fi</label>
                                 </div>
                                 <div class="settings-row">IP: ${info.ips.join('<br>')}</div>
                             </div>
                             <div id="settings-zvuk" class="settings-panel">
                                 <div class="settings-row">
                                     <div class="settings-label">Hlasitost (${meowConfig.volume}%)</div>
-                                    <input type="range" min="0" max="100" value="${meowConfig.volume}" class="slider" id="volume-slider" oninput="changeVolume(this.value)">
+                                    <input type="range" min="0" max="100" value="${meowConfig.volume}" class="slider" id="volume-slider">
                                 </div>
                             </div>
                             <div id="settings-napajeni" class="settings-panel">
-                                <button class="settings-btn" onclick="powerAction('restart')">Restartovat</button>
-                                <button class="settings-btn" onclick="powerAction('shutdown')">Vypnout</button>
+                                <button class="settings-btn" id="restart-btn">Restartovat</button>
+                                <button class="settings-btn" id="shutdown-btn">Vypnout</button>
                             </div>
                             <div id="settings-o-aplikaci" class="settings-panel">
                                 <div style="text-align:center;">
                                     <i class="fa-brands fa-linux" style="font-size:64px;"></i>
-                                    <h3>MeowOS Arch 3.0</h3>
-                                    <p>Pro RPi Zero 2W</p>
+                                    <h3>MeowOS Arch · Hyprland</h3>
+                                    <p>Finální edice 2026</p>
                                 </div>
                             </div>
                         </div>
                     `;
-                    createWindow('Nastavení', content, 750, 550, 150, 80);
+                    const winId = createWindow('Nastavení', content, 780, 580, 140, 70);
+
+                    // Inicializace posluchačů uvnitř okna (po vytvoření DOM)
+                    setTimeout(() => {
+                        const container = document.querySelector(`#${winId} .settings-container`);
+                        if (!container) return;
+
+                        // Přepínání karet
+                        container.querySelectorAll('.settings-tab').forEach(tab => {
+                            tab.addEventListener('click', (e) => {
+                                container.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
+                                container.querySelectorAll('.settings-panel').forEach(p => p.classList.remove('active'));
+                                e.target.classList.add('active');
+                                const targetId = 'settings-' + e.target.dataset.tab;
+                                container.querySelector('#' + targetId)?.classList.add('active');
+                            });
+                        });
+
+                        // Tapety z předvoleb
+                        container.querySelectorAll('.wallpaper-option').forEach(el => {
+                            el.addEventListener('click', () => {
+                                const wall = el.dataset.wall;
+                                if (wall) changeWallpaper(wall);
+                            });
+                        });
+
+                        // URL tapeta
+                        const urlBtn = container.querySelector('#set-wallpaper-url');
+                        if (urlBtn) {
+                            urlBtn.addEventListener('click', () => {
+                                const url = container.querySelector('#wallpaper-url')?.value;
+                                if (url) changeWallpaper("url('" + url + "')");
+                            });
+                        }
+
+                        // Primární barva
+                        const primaryInput = container.querySelector('#primary-color');
+                        if (primaryInput) {
+                            primaryInput.addEventListener('change', (e) => changePrimaryColor(e.target.value));
+                        }
+
+                        // Barva widgetů
+                        const widgetBgInput = container.querySelector('#widget-bg-color');
+                        if (widgetBgInput) {
+                            widgetBgInput.addEventListener('change', (e) => changeWidgetBgColor(e.target.value));
+                        }
+
+                        // Průhlednost
+                        const opacitySlider = container.querySelector('#widget-opacity-slider');
+                        if (opacitySlider) {
+                            opacitySlider.addEventListener('input', (e) => changeWidgetOpacity(e.target.value));
+                        }
+
+                        // Režim
+                        const themeSelect = container.querySelector('#theme-select');
+                        if (themeSelect) {
+                            themeSelect.addEventListener('change', (e) => changeTheme(e.target.value));
+                        }
+
+                        // Velikost písma
+                        const fontSizeSelect = container.querySelector('#font-size');
+                        if (fontSizeSelect) {
+                            fontSizeSelect.addEventListener('change', (e) => changeFontSize(e.target.value));
+                        }
+
+                        // Velikost oken
+                        const saveWinBtn = container.querySelector('#save-window-size');
+                        if (saveWinBtn) {
+                            saveWinBtn.addEventListener('click', () => {
+                                const w = container.querySelector('#win-width')?.value;
+                                const h = container.querySelector('#win-height')?.value;
+                                if (w && h) saveWindowSize(w, h);
+                            });
+                        }
+
+                        // Uživatel
+                        const saveUserBtn = container.querySelector('#save-user-settings');
+                        if (saveUserBtn) {
+                            saveUserBtn.addEventListener('click', () => {
+                                const name = container.querySelector('#username-input')?.value;
+                                const avatar = container.querySelector('#avatar-select')?.value;
+                                if (name && avatar) saveUserSettings(name, avatar);
+                            });
+                        }
+
+                        // Wi-Fi
+                        const wifiCheck = container.querySelector('#wifi-checkbox');
+                        if (wifiCheck) {
+                            wifiCheck.addEventListener('change', (e) => toggleWifi(e.target.checked));
+                        }
+
+                        // Hlasitost
+                        const volumeSlider = container.querySelector('#volume-slider');
+                        if (volumeSlider) {
+                            volumeSlider.addEventListener('input', (e) => changeVolume(e.target.value));
+                        }
+
+                        // Napájení
+                        const restartBtn = container.querySelector('#restart-btn');
+                        if (restartBtn) restartBtn.addEventListener('click', () => powerAction('restart'));
+                        const shutdownBtn = container.querySelector('#shutdown-btn');
+                        if (shutdownBtn) shutdownBtn.addEventListener('click', () => powerAction('shutdown'));
+
+                    }, 50);
                 });
         }
 
-        window.showSettingsTab = function(tab) {
-            document.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.settings-panel').forEach(p => p.classList.remove('active'));
-            event.target.classList.add('active');
-            document.getElementById('settings-' + tab).classList.add('active');
-        };
-
-        window.changeWallpaper = function(value) {
+        // ========================= FUNKCE PRO NASTAVENÍ =========================
+        function changeWallpaper(value) {
             document.body.style.setProperty('--wallpaper', value);
             fetch('/api/set-wallpaper', { method: 'POST', body: 'wallpaper=' + encodeURIComponent(value), headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
-        };
+        }
 
-        window.setWallpaperFromUrl = function() {
-            const url = document.getElementById('wallpaper-url').value;
-            if (url) changeWallpaper("url('" + url + "')");
-        };
-
-        window.changePrimaryColor = function(value) {
+        function changePrimaryColor(value) {
             document.body.style.setProperty('--primary', value);
             fetch('/api/set-primary', { method: 'POST', body: 'color=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
-        };
+        }
 
-        window.changeWidgetBgColor = function(value) {
+        function changeWidgetBgColor(value) {
             document.body.style.setProperty('--widget-bg', value);
             fetch('/api/set-widget-bg', { method: 'POST', body: 'color=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
-        };
+        }
 
-        window.changeWidgetOpacity = function(value) {
+        function changeWidgetOpacity(value) {
             document.body.style.setProperty('--widget-opacity', value);
             fetch('/api/set-widget-opacity', { method: 'POST', body: 'opacity=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
-        };
+        }
 
-        window.changeTheme = function(value) {
+        function changeTheme(value) {
             const root = document.documentElement;
             root.style.setProperty('--theme', value);
-            root.style.setProperty('--text-color', value === 'dark' ? 'white' : 'black');
+            root.style.setProperty('--text-color', value === 'dark' ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.9)');
             fetch('/api/set-theme', { method: 'POST', body: 'theme=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
-        };
+        }
 
-        window.changeFontSize = function(value) {
+        function changeFontSize(value) {
             document.body.style.setProperty('--font-size', value);
             fetch('/api/set-fontsize', { method: 'POST', body: 'size=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
-        };
+        }
 
-        window.saveUserSettings = function() {
-            const newName = document.getElementById('username-input').value;
-            const newAvatar = document.getElementById('avatar-select').value;
-            document.getElementById('start-username').innerText = newName;
-            document.getElementById('start-username').previousElementSibling.className = `fa-solid fa-${newAvatar}`;
-            fetch('/api/set-username', { method: 'POST', body: 'username=' + encodeURIComponent(newName), headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
-            fetch('/api/set-avatar', { method: 'POST', body: 'avatar=' + newAvatar, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
-        };
+        function saveUserSettings(name, avatar) {
+            document.getElementById('start-username').innerText = name;
+            document.getElementById('start-username').previousElementSibling.className = `fa-solid fa-${avatar}`;
+            fetch('/api/set-username', { method: 'POST', body: 'username=' + encodeURIComponent(name), headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
+            fetch('/api/set-avatar', { method: 'POST', body: 'avatar=' + avatar, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
+        }
 
-        window.saveWindowSize = function() {
-            const w = document.getElementById('win-width').value;
-            const h = document.getElementById('win-height').value;
-            document.documentElement.style.setProperty('--default-win-width', w + 'px');
-            document.documentElement.style.setProperty('--default-win-height', h + 'px');
-            fetch('/api/set-window-size', { method: 'POST', body: `width=${w}&height=${h}`, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
-        };
+        function saveWindowSize(width, height) {
+            document.documentElement.style.setProperty('--default-win-width', width + 'px');
+            document.documentElement.style.setProperty('--default-win-height', height + 'px');
+            fetch('/api/set-window-size', { method: 'POST', body: `width=${width}&height=${height}`, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
+        }
 
-        window.toggleWifi = function(enabled) {
+        function toggleWifi(enabled) {
             fetch('/api/set-wifi', { method: 'POST', body: 'enabled=' + enabled, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
-        };
+        }
 
-        window.changeVolume = function(value) {
+        function changeVolume(value) {
             fetch('/api/set-volume', { method: 'POST', body: 'volume=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
-        };
+        }
 
-        window.powerAction = function(action) {
+        function powerAction(action) {
             if (action === 'restart' && confirm('Opravdu restartovat?')) fetch('/api/restart');
             else if (action === 'shutdown' && confirm('Opravdu vypnout?')) fetch('/api/shutdown');
-        };
+        }
 
         // ========================= START MENU =========================
         function toggleStartMenu() {
@@ -1188,7 +1319,7 @@ def api_cmd():
 @app.route('/api/set-username', methods=['POST'])
 def api_set_username():
     config = load_config()
-    config['username'] = request.form.get('username', 'Jakub')
+    config['username'] = request.form.get('username', 'jakub')
     save_config(config)
     return 'OK'
 
@@ -1209,21 +1340,21 @@ def api_set_wallpaper():
 @app.route('/api/set-primary', methods=['POST'])
 def api_set_primary():
     config = load_config()
-    config['primary_color'] = request.form.get('color', '#4facfe')
+    config['primary_color'] = request.form.get('color', '#c084fc')
     save_config(config)
     return 'OK'
 
 @app.route('/api/set-widget-bg', methods=['POST'])
 def api_set_widget_bg():
     config = load_config()
-    config['widget_bg_color'] = request.form.get('color', '#0f192a')
+    config['widget_bg_color'] = request.form.get('color', '#0a0a0f')
     save_config(config)
     return 'OK'
 
 @app.route('/api/set-widget-opacity', methods=['POST'])
 def api_set_widget_opacity():
     config = load_config()
-    config['widget_opacity'] = float(request.form.get('opacity', 0.8))
+    config['widget_opacity'] = float(request.form.get('opacity', 0.85))
     save_config(config)
     return 'OK'
 
@@ -1237,15 +1368,15 @@ def api_set_theme():
 @app.route('/api/set-fontsize', methods=['POST'])
 def api_set_fontsize():
     config = load_config()
-    config['font_size'] = request.form.get('size', '14px')
+    config['font_size'] = request.form.get('size', '13px')
     save_config(config)
     return 'OK'
 
 @app.route('/api/set-window-size', methods=['POST'])
 def api_set_window_size():
     config = load_config()
-    config['default_window_width'] = int(request.form.get('width', 600))
-    config['default_window_height'] = int(request.form.get('height', 400))
+    config['default_window_width'] = int(request.form.get('width', 640))
+    config['default_window_height'] = int(request.form.get('height', 440))
     save_config(config)
     return 'OK'
 
