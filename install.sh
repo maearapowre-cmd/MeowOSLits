@@ -1,5 +1,5 @@
 #!/bin/bash
-# MeowOS Arch – kompletní instalace s rozšířeným Nastavením
+# MeowOS Arch – finální verze s opraveným Nastavením a prohlížečem
 # Autor: Jakub (s asistencí AI)
 
 set -e
@@ -12,16 +12,12 @@ echo "📁 Vytvářím složku pro aplikaci..."
 mkdir -p ~/meowos-arch
 cd ~/meowos-arch
 
-echo "🐧 Vytvářím hlavní soubor app.py (toto může chvíli trvat)..."
+echo "🐧 Vytvářím hlavní soubor app.py (může to chvíli trvat)..."
 
 cat > app.py << 'EOF'
 #!/usr/bin/env python3
 """
-MeowOS Arch – kompletní desktop s rozšířeným Nastavením
-Vlastnosti:
-- vlastní tapeta z URL
-- nastavení průhlednosti a barvy widgetů
-- nastavení výchozí velikosti oken
+MeowOS Arch – finální verze s opraveným Nastavením a prohlížečem
 """
 
 import os
@@ -43,8 +39,8 @@ DEFAULT_CONFIG = {
     'username': 'Jakub',
     'wallpaper': 'linear-gradient(145deg, #0f172a, #1e293b)',
     'primary_color': '#4facfe',
-    'widget_bg_color': '#0f192a',        # základní barva widgetů (tmavě modrá)
-    'widget_opacity': 0.8,                # průhlednost widgetů (0-1)
+    'widget_bg_color': '#0f192a',
+    'widget_opacity': 0.8,
     'theme': 'dark',
     'font_size': '14px',
     'avatar': 'user-astronaut',
@@ -113,7 +109,7 @@ def get_ip_addresses():
     try:
         for iface in psutil.net_if_addrs():
             for addr in psutil.net_if_addrs()[iface]:
-                if addr.family == 2:  # IPv4
+                if addr.family == 2:
                     ips.append(f"{iface}: {addr.address}")
     except:
         pass
@@ -149,7 +145,6 @@ HTML_TEMPLATE = """
             font-family: 'Segoe UI', 'Roboto', system-ui, sans-serif;
         }
 
-        /* CSS proměnné – globální nastavení */
         :root {
             --wallpaper: {{ wallpaper }};
             --primary: {{ primary_color }};
@@ -183,7 +178,6 @@ HTML_TEMPLATE = """
             overflow: hidden;
         }
 
-        /* ========================= OKNA ========================= */
         .window {
             position: absolute;
             min-width: 300px;
@@ -266,7 +260,6 @@ HTML_TEMPLATE = """
             overflow-y: auto;
         }
 
-        /* ========================= TASKBAR ========================= */
         #taskbar {
             position: fixed;
             bottom: 0;
@@ -320,7 +313,6 @@ HTML_TEMPLATE = """
             border-radius: 20px;
         }
 
-        /* ========================= START MENU ========================= */
         #start-menu {
             position: fixed;
             bottom: 60px;
@@ -378,7 +370,6 @@ HTML_TEMPLATE = """
             text-align: center;
         }
 
-        /* ========================= IKONY ========================= */
         .icon-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
@@ -407,7 +398,6 @@ HTML_TEMPLATE = """
             filter: drop-shadow(0 8px 6px rgba(0,0,0,0.5));
         }
 
-        /* ========================= TERMINÁL ========================= */
         .terminal-container {
             display: flex;
             flex-direction: column;
@@ -445,7 +435,6 @@ HTML_TEMPLATE = """
             outline: none;
         }
 
-        /* ========================= KALKULAČKA ========================= */
         .calculator {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -482,7 +471,6 @@ HTML_TEMPLATE = """
             opacity: 0.7;
         }
 
-        /* ========================= NASTAVENÍ ========================= */
         .settings-tabs {
             display: flex;
             gap: 5px;
@@ -568,19 +556,50 @@ HTML_TEMPLATE = """
         .url-input input {
             flex: 1;
         }
+        .browser-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .browser-input input {
+            flex: 1;
+            padding: 8px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 6px;
+            color: white;
+        }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
 <body>
+    <!-- Předání konfigurace do JavaScriptu -->
+    <script>
+        window.meowConfig = {
+            username: {{ username|tojson }},
+            wallpaper: {{ wallpaper|tojson }},
+            primary_color: {{ primary_color|tojson }},
+            widget_bg_color: {{ widget_bg_color|tojson }},
+            widget_opacity: {{ widget_opacity|tojson }},
+            theme: {{ theme|tojson }},
+            font_size: {{ font_size|tojson }},
+            avatar: {{ avatar|tojson }},
+            wifi_enabled: {{ wifi_enabled|tojson }},
+            volume: {{ volume|tojson }},
+            default_window_width: {{ default_window_width|tojson }},
+            default_window_height: {{ default_window_height|tojson }}
+        };
+    </script>
+
     <div id="desktop"></div>
 
     <div id="taskbar">
         <div class="taskbar-center">
             <div class="taskbar-icon" onclick="toggleStartMenu()"><i class="fa-brands fa-linux"></i></div>
-            <div class="taskbar-icon" onclick="openSearch()"><i class="fa-solid fa-magnifying-glass"></i></div>
-            <div class="taskbar-icon" onclick="openBrowser('edge')"><i class="fa-brands fa-edge"></i></div>
+            <div class="taskbar-icon" onclick="openBrowserWindow()"><i class="fa-solid fa-globe"></i></div>
             <div class="taskbar-icon" onclick="openFileManager()"><i class="fa-regular fa-folder-open"></i></div>
-            <div class="taskbar-icon" onclick="openBrowser('firefox')"><i class="fa-brands fa-firefox-browser"></i></div>
+            <div class="taskbar-icon" onclick="openTerminal()"><i class="fa-solid fa-terminal"></i></div>
+            <div class="taskbar-icon" onclick="openCalculator()"><i class="fa-solid fa-calculator"></i></div>
         </div>
         <div class="taskbar-right">
             <div class="taskbar-icon" onclick="openSettings()"><i class="fa-solid fa-gear"></i></div>
@@ -600,13 +619,9 @@ HTML_TEMPLATE = """
             <div class="start-app" onclick="openTerminal()"><i class="fa-solid fa-terminal"></i><span>Terminál</span></div>
             <div class="start-app" onclick="openCalculator()"><i class="fa-solid fa-calculator"></i><span>Kalkulačka</span></div>
             <div class="start-app" onclick="openThisPC()"><i class="fa-solid fa-computer"></i><span>Tento PC</span></div>
-            <div class="start-app" onclick="openBrowser('edge')"><i class="fa-brands fa-edge"></i><span>Edge</span></div>
-            <div class="start-app" onclick="openBrowser('firefox')"><i class="fa-brands fa-firefox-browser"></i><span>Firefox</span></div>
-            <div class="start-app" onclick="openStore()"><i class="fa-solid fa-store"></i><span>Obchod</span></div>
-            <div class="start-app" onclick="openSearch()"><i class="fa-solid fa-search"></i><span>Hledání</span></div>
+            <div class="start-app" onclick="openBrowserWindow()"><i class="fa-solid fa-globe"></i><span>Prohlížeč</span></div>
+            <div class="start-app" onclick="openApp('store')"><i class="fa-solid fa-store"></i><span>Obchod</span></div>
             <div class="start-app" onclick="openApp('calendar')"><i class="fa-regular fa-calendar"></i><span>Kalendář</span></div>
-            <div class="start-app" onclick="openApp('music')"><i class="fa-regular fa-music"></i><span>Hudba</span></div>
-            <div class="start-app" onclick="openApp('videos')"><i class="fa-regular fa-video"></i><span>Videa</span></div>
         </div>
     </div>
 
@@ -619,7 +634,6 @@ HTML_TEMPLATE = """
         let startMenuVisible = false;
         let terminalHistory = [];
         let historyIndex = -1;
-        let username = {{ username|tojson }};
 
         // ========================= POMOCNÉ FUNKCE =========================
         function updateClock() {
@@ -640,10 +654,8 @@ HTML_TEMPLATE = """
             const id = 'win_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
             const desktop = document.getElementById('desktop');
 
-            // Použijeme výchozí velikost z CSS proměnných, pokud není zadána
-            const style = getComputedStyle(document.body);
-            const defaultWidth = parseInt(style.getPropertyValue('--default-win-width')) || 600;
-            const defaultHeight = parseInt(style.getPropertyValue('--default-win-height')) || 400;
+            const defaultWidth = meowConfig.default_window_width || 600;
+            const defaultHeight = meowConfig.default_window_height || 400;
 
             const winDiv = document.createElement('div');
             winDiv.className = 'window';
@@ -734,11 +746,11 @@ HTML_TEMPLATE = """
             createWindow('Správce souborů', `
                 <div style="display: flex; gap: 15px;">
                     <div style="width: 180px; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px;">
-                        <div style="padding: 8px; margin-bottom: 4px; border-radius: 6px;"><i class="fa-regular fa-house"></i> Domů</div>
-                        <div style="padding: 8px; margin-bottom: 4px; border-radius: 6px;"><i class="fa-regular fa-image"></i> Obrázky</div>
-                        <div style="padding: 8px; margin-bottom: 4px; border-radius: 6px;"><i class="fa-regular fa-file"></i> Dokumenty</div>
-                        <div style="padding: 8px; margin-bottom: 4px; border-radius: 6px;"><i class="fa-regular fa-music"></i> Hudba</div>
-                        <div style="padding: 8px; margin-bottom: 4px; border-radius: 6px;"><i class="fa-regular fa-video"></i> Videa</div>
+                        <div style="padding: 8px;"><i class="fa-regular fa-house"></i> Domů</div>
+                        <div style="padding: 8px;"><i class="fa-regular fa-image"></i> Obrázky</div>
+                        <div style="padding: 8px;"><i class="fa-regular fa-file"></i> Dokumenty</div>
+                        <div style="padding: 8px;"><i class="fa-regular fa-music"></i> Hudba</div>
+                        <div style="padding: 8px;"><i class="fa-regular fa-video"></i> Videa</div>
                     </div>
                     <div style="flex:1;">
                         <div class="icon-grid">
@@ -775,7 +787,7 @@ HTML_TEMPLATE = """
                         `;
                     });
                     html += '</div>';
-                    createWindow('Tento počítač', html, null, null, 180, 120);
+                    createWindow('Tento počítač', html, 500, 300, 180, 120);
                 });
         }
 
@@ -790,7 +802,7 @@ HTML_TEMPLATE = """
                     </div>
                 </div>
             `;
-            const winId = createWindow('Terminál', content, null, null, 200, 150);
+            const winId = createWindow('Terminál', content, 600, 380, 200, 150);
             setTimeout(() => {
                 const input = document.getElementById(`${termId}-input`);
                 const output = document.getElementById(`${termId}-output`);
@@ -883,40 +895,35 @@ HTML_TEMPLATE = """
             }
         };
 
-        function openSearch() {
-            createWindow('Hledání', `
+        function openBrowserWindow() {
+            createWindow('Prohlížeč', `
                 <div style="padding: 20px;">
-                    <input type="text" placeholder="Hledat v souborech..." style="width:100%; padding:8px; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.2); border-radius:6px; color:inherit; margin-bottom:15px;">
-                    <div style="opacity:0.5; text-align:center;">Zadejte hledaný výraz</div>
+                    <div class="browser-input">
+                        <input type="text" id="browser-url" placeholder="Zadejte URL (např. https://seznam.cz)">
+                        <button class="settings-btn" onclick="navigateBrowser()">Otevřít</button>
+                    </div>
+                    <p style="color: #ccc; font-size: 12px;">Stránka se otevře v novém okně tvého prohlížeče.</p>
                 </div>
-            `, 450, 250, 250, 150);
+            `, 500, 200, 250, 150);
         }
 
-        function openStore() {
-            createWindow('Obchod', `
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
-                    <div style="background:rgba(255,255,255,0.05); border-radius:10px; padding:15px; text-align:center;"><i class="fa-brands fa-firefox-browser" style="font-size:36px;"></i><br>Firefox</div>
-                    <div style="background:rgba(255,255,255,0.05); border-radius:10px; padding:15px; text-align:center;"><i class="fa-brands fa-edge" style="font-size:36px;"></i><br>Edge</div>
-                    <div style="background:rgba(255,255,255,0.05); border-radius:10px; padding:15px; text-align:center;"><i class="fa-solid fa-terminal" style="font-size:36px;"></i><br>Terminál</div>
-                    <div style="background:rgba(255,255,255,0.05); border-radius:10px; padding:15px; text-align:center;"><i class="fa-solid fa-calculator" style="font-size:36px;"></i><br>Kalkulačka</div>
-                    <div style="background:rgba(255,255,255,0.05); border-radius:10px; padding:15px; text-align:center;"><i class="fa-regular fa-file" style="font-size:36px;"></i><br>Editor</div>
-                    <div style="background:rgba(255,255,255,0.05); border-radius:10px; padding:15px; text-align:center;"><i class="fa-regular fa-image" style="font-size:36px;"></i><br>Prohlížeč</div>
-                </div>
-            `, 500, 350, 150, 100);
-        }
-
-        function openBrowser(browser) {
-            if (browser === 'edge') window.open('https://www.microsoft.com/edge', '_blank');
-            else if (browser === 'firefox') window.open('https://www.mozilla.org/firefox', '_blank');
-        }
+        window.navigateBrowser = function() {
+            const url = document.getElementById('browser-url').value;
+            if (url) {
+                let fullUrl = url;
+                if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                    fullUrl = 'https://' + url;
+                }
+                window.open(fullUrl, '_blank');
+            }
+        };
 
         function openApp(app) {
-            if (app === 'calendar') createWindow('Kalendář', '<div style="padding:20px; text-align:center;">Kalendář (demo)</div>', 400, 300, 200, 150);
-            else if (app === 'music') createWindow('Hudba', '<div style="padding:20px; text-align:center;">Přehrávač hudby (demo)</div>', 400, 300, 200, 150);
-            else if (app === 'videos') createWindow('Videa', '<div style="padding:20px; text-align:center;">Přehrávač videí (demo)</div>', 400, 300, 200, 150);
+            if (app === 'store') createWindow('Obchod', '<div style="padding:20px; text-align:center;">Obchod s aplikacemi (demo)</div>', 400, 300, 200, 150);
+            else if (app === 'calendar') createWindow('Kalendář', '<div style="padding:20px; text-align:center;">Kalendář (demo)</div>', 400, 300, 200, 150);
         }
 
-        // ========================= NASTAVENÍ (ROZŠÍŘENÉ) =========================
+        // ========================= NASTAVENÍ =========================
         function openSettings() {
             fetch('/api/system-info')
                 .then(r => r.json())
@@ -952,146 +959,99 @@ HTML_TEMPLATE = """
                                 <div class="settings-row">
                                     <div class="settings-label">Primární barva</div>
                                     <div>
-                                        <span class="color-preview" style="background: var(--primary);"></span>
-                                        <input type="color" id="primary-color" value="{{ primary_color }}" onchange="changePrimaryColor(this.value)">
+                                        <span class="color-preview" style="background: ${meowConfig.primary_color};"></span>
+                                        <input type="color" id="primary-color" value="${meowConfig.primary_color}" onchange="changePrimaryColor(this.value)">
                                     </div>
                                 </div>
                                 <div class="settings-row">
                                     <div class="settings-label">Barva widgetů</div>
                                     <div>
-                                        <span class="color-preview" style="background: var(--widget-bg);"></span>
-                                        <input type="color" id="widget-bg-color" value="{{ widget_bg_color }}" onchange="changeWidgetBgColor(this.value)">
+                                        <span class="color-preview" style="background: ${meowConfig.widget_bg_color};"></span>
+                                        <input type="color" id="widget-bg-color" value="${meowConfig.widget_bg_color}" onchange="changeWidgetBgColor(this.value)">
                                     </div>
                                 </div>
                                 <div class="settings-row">
-                                    <div class="settings-label">Průhlednost widgetů (${Math.round({{ widget_opacity }}*100)}%)</div>
-                                    <input type="range" min="0.3" max="1" step="0.05" value="{{ widget_opacity }}" class="slider" id="widget-opacity-slider" oninput="changeWidgetOpacity(this.value)">
+                                    <div class="settings-label">Průhlednost widgetů (${Math.round(meowConfig.widget_opacity*100)}%)</div>
+                                    <input type="range" min="0.3" max="1" step="0.05" value="${meowConfig.widget_opacity}" class="slider" id="widget-opacity-slider" oninput="changeWidgetOpacity(this.value)">
                                 </div>
                                 <div class="settings-row">
                                     <div class="settings-label">Barevný režim</div>
                                     <select class="settings-select" id="theme-select" onchange="changeTheme(this.value)">
-                                        <option value="dark" {{ 'selected' if theme=='dark' else '' }}>Tmavý</option>
-                                        <option value="light" {{ 'selected' if theme=='light' else '' }}>Světlý</option>
+                                        <option value="dark" ${meowConfig.theme=='dark'?'selected':''}>Tmavý</option>
+                                        <option value="light" ${meowConfig.theme=='light'?'selected':''}>Světlý</option>
                                     </select>
                                 </div>
                                 <div class="settings-row">
                                     <div class="settings-label">Velikost písma</div>
                                     <select class="settings-select" id="font-size" onchange="changeFontSize(this.value)">
-                                        <option value="12px" {{ 'selected' if font_size=='12px' else '' }}>Malá</option>
-                                        <option value="14px" {{ 'selected' if font_size=='14px' else '' }}>Střední</option>
-                                        <option value="16px" {{ 'selected' if font_size=='16px' else '' }}>Velká</option>
+                                        <option value="12px" ${meowConfig.font_size=='12px'?'selected':''}>Malá</option>
+                                        <option value="14px" ${meowConfig.font_size=='14px'?'selected':''}>Střední</option>
+                                        <option value="16px" ${meowConfig.font_size=='16px'?'selected':''}>Velká</option>
                                     </select>
                                 </div>
                             </div>
                             <div id="settings-okna" class="settings-panel">
                                 <div class="settings-row">
                                     <div class="settings-label">Výchozí šířka oken (px)</div>
-                                    <input type="number" class="settings-input" id="win-width" value="{{ default_window_width }}" min="300" max="1200">
+                                    <input type="number" class="settings-input" id="win-width" value="${meowConfig.default_window_width}" min="300" max="1200">
                                 </div>
                                 <div class="settings-row">
                                     <div class="settings-label">Výchozí výška oken (px)</div>
-                                    <input type="number" class="settings-input" id="win-height" value="{{ default_window_height }}" min="200" max="900">
+                                    <input type="number" class="settings-input" id="win-height" value="${meowConfig.default_window_height}" min="200" max="900">
                                 </div>
                                 <button class="settings-btn" onclick="saveWindowSize()">Uložit velikost</button>
                             </div>
                             <div id="settings-system" class="settings-panel">
-                                <div class="settings-row">
-                                    <div class="settings-label">Hostname</div>
-                                    <div>${info.hostname}</div>
-                                </div>
-                                <div class="settings-row">
-                                    <div class="settings-label">Operační systém</div>
-                                    <div>${info.os}</div>
-                                </div>
-                                <div class="settings-row">
-                                    <div class="settings-label">Využití CPU</div>
-                                    <div>${info.cpu}%</div>
-                                </div>
-                                <div class="settings-row">
-                                    <div class="settings-label">Využití RAM</div>
-                                    <div>${info.ram}%</div>
-                                </div>
-                                <div class="settings-row">
-                                    <div class="settings-label">Teplota CPU</div>
-                                    <div>${info.temp}°C</div>
-                                </div>
-                                <div class="settings-row">
-                                    <div class="settings-label">Běží</div>
-                                    <div>${uptime}</div>
-                                </div>
-                                <div class="settings-row">
-                                    <div class="settings-label">Disky</div>
-                                    ${info.disks.map(d => `<div>${d.name}: ${(d.used/1e9).toFixed(1)}/${(d.total/1e9).toFixed(1)} GB (${d.percent}%)</div>`).join('')}
-                                </div>
+                                <div class="settings-row"><span class="settings-label">Hostname</span> ${info.hostname}</div>
+                                <div class="settings-row"><span class="settings-label">OS</span> ${info.os}</div>
+                                <div class="settings-row"><span class="settings-label">CPU</span> ${info.cpu}%</div>
+                                <div class="settings-row"><span class="settings-label">RAM</span> ${info.ram}%</div>
+                                <div class="settings-row"><span class="settings-label">Teplota</span> ${info.temp}°C</div>
+                                <div class="settings-row"><span class="settings-label">Běží</span> ${uptime}</div>
+                                <div class="settings-row"><span class="settings-label">Disky</span> ${info.disks.map(d => `<div>${d.name}: ${(d.used/1e9).toFixed(1)}/${(d.total/1e9).toFixed(1)} GB</div>`).join('')}</div>
                             </div>
                             <div id="settings-uzivatele" class="settings-panel">
                                 <div class="settings-row">
                                     <div class="settings-label">Uživatelské jméno</div>
-                                    <input type="text" class="settings-input" id="username-input" value="${username}">
+                                    <input type="text" class="settings-input" id="username-input" value="${meowConfig.username}">
                                 </div>
                                 <div class="settings-row">
-                                    <div class="settings-label">Avatar (ikona)</div>
+                                    <div class="settings-label">Avatar</div>
                                     <select class="settings-select" id="avatar-select">
-                                        <option value="user-astronaut">Astronaut</option>
-                                        <option value="user-ninja">Ninja</option>
-                                        <option value="user-secret">Tajný</option>
-                                        <option value="user-tie">Obchodník</option>
-                                        <option value="user-graduate">Student</option>
+                                        <option value="user-astronaut" ${meowConfig.avatar=='user-astronaut'?'selected':''}>Astronaut</option>
+                                        <option value="user-ninja" ${meowConfig.avatar=='user-ninja'?'selected':''}>Ninja</option>
+                                        <option value="user-secret" ${meowConfig.avatar=='user-secret'?'selected':''}>Tajný</option>
                                     </select>
                                 </div>
                                 <button class="settings-btn" onclick="saveUserSettings()">Uložit</button>
                             </div>
                             <div id="settings-sit" class="settings-panel">
                                 <div class="settings-row">
-                                    <div class="settings-label">Wi-Fi</div>
-                                    <label><input type="checkbox" id="wifi-checkbox" {{ 'checked' if wifi_enabled else '' }} onchange="toggleWifi(this.checked)"> Povolit Wi-Fi</label>
+                                    <label><input type="checkbox" id="wifi-checkbox" ${meowConfig.wifi_enabled?'checked':''} onchange="toggleWifi(this.checked)"> Povolit Wi-Fi</label>
                                 </div>
-                                <div class="settings-row">
-                                    <div class="settings-label">IP adresy</div>
-                                    ${info.ips.map(ip => `<div>${ip}</div>`).join('')}
-                                </div>
+                                <div class="settings-row">IP: ${info.ips.join('<br>')}</div>
                             </div>
                             <div id="settings-zvuk" class="settings-panel">
                                 <div class="settings-row">
-                                    <div class="settings-label">Hlasitost (${volume}%)</div>
-                                    <input type="range" min="0" max="100" value="${volume}" class="slider" id="volume-slider" oninput="changeVolume(this.value)">
+                                    <div class="settings-label">Hlasitost (${meowConfig.volume}%)</div>
+                                    <input type="range" min="0" max="100" value="${meowConfig.volume}" class="slider" id="volume-slider" oninput="changeVolume(this.value)">
                                 </div>
                             </div>
                             <div id="settings-napajeni" class="settings-panel">
-                                <div class="settings-row">
-                                    <button class="settings-btn" onclick="powerAction('restart')">Restartovat</button>
-                                    <button class="settings-btn" onclick="powerAction('shutdown')">Vypnout</button>
-                                </div>
+                                <button class="settings-btn" onclick="powerAction('restart')">Restartovat</button>
+                                <button class="settings-btn" onclick="powerAction('shutdown')">Vypnout</button>
                             </div>
                             <div id="settings-o-aplikaci" class="settings-panel">
                                 <div style="text-align:center;">
-                                    <i class="fa-brands fa-linux" style="font-size: 64px;"></i>
-                                    <h3>MeowOS Arch</h3>
-                                    <p>Verze 3.0</p>
-                                    <p>Kompletní desktopové prostředí pro RPi Zero 2W</p>
-                                    <p>Vytvořeno v Python + Flask</p>
+                                    <i class="fa-brands fa-linux" style="font-size:64px;"></i>
+                                    <h3>MeowOS Arch 3.0</h3>
+                                    <p>Pro RPi Zero 2W</p>
                                 </div>
                             </div>
                         </div>
                     `;
-                    const winId = createWindow('Nastavení', content, 750, 550, 150, 80);
-                    setTimeout(() => {
-                        document.getElementById('theme-select')?.addEventListener('change', (e) => changeTheme(e.target.value));
-                        document.getElementById('widget-opacity-slider')?.addEventListener('input', (e) => changeWidgetOpacity(e.target.value));
-                        document.getElementById('font-size')?.addEventListener('change', (e) => changeFontSize(e.target.value));
-                        document.getElementById('avatar-select')?.addEventListener('change', (e) => changeAvatar(e.target.value));
-                    }, 100);
+                    createWindow('Nastavení', content, 750, 550, 150, 80);
                 });
-        }
-
-        function getConfig(key) {
-            const style = getComputedStyle(document.body);
-            if (key === 'widget_opacity') return parseFloat(style.getPropertyValue('--widget-opacity')) || 0.8;
-            if (key === 'theme') return style.getPropertyValue('--theme') || 'dark';
-            if (key === 'font_size') return style.getPropertyValue('--font-size');
-            if (key === 'primary_color') return style.getPropertyValue('--primary');
-            if (key === 'widget_bg_color') return style.getPropertyValue('--widget-bg');
-            return null;
         }
 
         window.showSettingsTab = function(tab) {
@@ -1108,19 +1068,17 @@ HTML_TEMPLATE = """
 
         window.setWallpaperFromUrl = function() {
             const url = document.getElementById('wallpaper-url').value;
-            if (url) {
-                changeWallpaper("url('" + url + "')");
-            }
+            if (url) changeWallpaper("url('" + url + "')");
         };
 
         window.changePrimaryColor = function(value) {
             document.body.style.setProperty('--primary', value);
-            fetch('/api/set-primary', { method: 'POST', body: 'color=' + encodeURIComponent(value), headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
+            fetch('/api/set-primary', { method: 'POST', body: 'color=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
         };
 
         window.changeWidgetBgColor = function(value) {
             document.body.style.setProperty('--widget-bg', value);
-            fetch('/api/set-widget-bg', { method: 'POST', body: 'color=' + encodeURIComponent(value), headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
+            fetch('/api/set-widget-bg', { method: 'POST', body: 'color=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
         };
 
         window.changeWidgetOpacity = function(value) {
@@ -1140,17 +1098,11 @@ HTML_TEMPLATE = """
             fetch('/api/set-fontsize', { method: 'POST', body: 'size=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
         };
 
-        window.changeAvatar = function(value) {
-            document.getElementById('start-username').previousElementSibling.className = `fa-solid fa-${value}`;
-            fetch('/api/set-avatar', { method: 'POST', body: 'avatar=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
-        };
-
         window.saveUserSettings = function() {
             const newName = document.getElementById('username-input').value;
             const newAvatar = document.getElementById('avatar-select').value;
             document.getElementById('start-username').innerText = newName;
             document.getElementById('start-username').previousElementSibling.className = `fa-solid fa-${newAvatar}`;
-            username = newName;
             fetch('/api/set-username', { method: 'POST', body: 'username=' + encodeURIComponent(newName), headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
             fetch('/api/set-avatar', { method: 'POST', body: 'avatar=' + newAvatar, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
         };
@@ -1160,11 +1112,7 @@ HTML_TEMPLATE = """
             const h = document.getElementById('win-height').value;
             document.documentElement.style.setProperty('--default-win-width', w + 'px');
             document.documentElement.style.setProperty('--default-win-height', h + 'px');
-            fetch('/api/set-window-size', {
-                method: 'POST',
-                body: `width=${w}&height=${h}`,
-                headers: {'Content-Type': 'application/x-www-form-urlencoded'}
-            });
+            fetch('/api/set-window-size', { method: 'POST', body: `width=${w}&height=${h}`, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
         };
 
         window.toggleWifi = function(enabled) {
