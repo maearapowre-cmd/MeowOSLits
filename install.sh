@@ -1,5 +1,5 @@
 #!/bin/bash
-# MeowOS – finální edice s profily, Bash a opraveným načítáním tapet
+# MeowOS – finální edice s opraveným ukládáním tapety a podporou Bash
 # Autor: Jakub (s asistencí AI)
 
 set -e
@@ -17,7 +17,7 @@ echo "🐧 Vytvářím hlavní soubor app.py (může to chvíli trvat)..."
 cat > app.py << 'EOF'
 #!/usr/bin/env python3
 """
-MeowOS – finální edice s profily nastavení a podporou Bash v Code Editoru
+MeowOS – finální edice s profily, Bash a opravou prázdné tapety
 """
 
 import os
@@ -836,6 +836,11 @@ HTML_TEMPLATE = """
             profiles: {{ profiles|tojson }},
             active_profile: {{ active_profile|tojson }}
         };
+
+        // Oprava: pokud je tapeta prázdná, nastavíme výchozí
+        if (!meowConfig.wallpaper || meowConfig.wallpaper.trim() === '') {
+            meowConfig.wallpaper = 'linear-gradient(145deg, #0f172a, #1e1b2b)';
+        }
     </script>
 
     <div id="desktop"></div>
@@ -1683,7 +1688,6 @@ HTML_TEMPLATE = """
                 headers: {'Content-Type': 'application/x-www-form-urlencoded'},
                 body: 'name=' + encodeURIComponent(name)
             }).then(() => {
-                // Vynutit nové načtení bez cache
                 window.location.href = window.location.href.split('?')[0] + '?t=' + Date.now();
             });
         }
