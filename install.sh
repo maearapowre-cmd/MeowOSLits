@@ -1,5 +1,5 @@
 #!/bin/bash
-# MeowOS – finální edice s přehledem oken a volbou umístění taskbaru
+# MeowOS – finální edice s přehledem oken a volbou umístění taskbaru (OPRAVENO)
 # Autor: Jakub (s asistencí AI)
 
 set -e
@@ -17,7 +17,7 @@ echo "🐧 Vytvářím hlavní soubor app.py (může to chvíli trvat)..."
 cat > app.py << 'EOF'
 #!/usr/bin/env python3
 """
-MeowOS – finální edice s přehledem oken a volbou umístění taskbaru
+MeowOS – finální edice s přehledem oken a volbou umístění taskbaru (OPRAVENO)
 """
 
 import os
@@ -858,6 +858,11 @@ HTML_TEMPLATE = """
             const defaultWidth = meowConfig.default_window_width || 640;
             const defaultHeight = meowConfig.default_window_height || 440;
 
+            // Pokud je lišta nahoře, posuneme výchozí y dolů, aby okno nezačínalo pod lištou
+            if (meowConfig.taskbar_position === 'top' && y < 48) {
+                y = 48;
+            }
+
             const winDiv = document.createElement('div');
             winDiv.className = 'window';
             winDiv.id = id;
@@ -912,10 +917,11 @@ HTML_TEMPLATE = """
             let newX = e.clientX - dragOffsetX;
             let newY = e.clientY - dragOffsetY;
             const desktop = document.getElementById('desktop');
+            const taskbarHeight = 48;
             const maxX = desktop.clientWidth - draggedWindow.offsetWidth;
-            const maxY = desktop.clientHeight - draggedWindow.offsetHeight - 48;
+            const maxY = desktop.clientHeight - draggedWindow.offsetHeight - (meowConfig.taskbar_position === 'bottom' ? taskbarHeight : 0);
             newX = Math.max(0, Math.min(newX, maxX));
-            newY = Math.max(0, Math.min(newY, maxY));
+            newY = Math.max(meowConfig.taskbar_position === 'top' ? taskbarHeight : 0, Math.min(newY, maxY));
             draggedWindow.style.left = newX + 'px';
             draggedWindow.style.top = newY + 'px';
         }
@@ -992,9 +998,10 @@ HTML_TEMPLATE = """
             const dx = e.clientX - startX;
             const dy = e.clientY - startY;
             const desktop = document.getElementById('desktop');
+            const taskbarHeight = 48;
             const minW = 300, minH = 200;
             const maxW = desktop.clientWidth - startLeft;
-            const maxH = desktop.clientHeight - startTop - 48;
+            const maxH = desktop.clientHeight - startTop - (meowConfig.taskbar_position === 'bottom' ? taskbarHeight : 0);
 
             let newWidth = startWidth;
             let newHeight = startHeight;
