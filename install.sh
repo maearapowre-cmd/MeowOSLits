@@ -1,5 +1,5 @@
 #!/bin/bash
-# MeowOS – optimalizovaná verze pro plynulý chod při více oknech
+# MeowOS – finální edice s hrami (Pong, Snake, Tic‑Tac‑Toe)
 # Autor: Jakub (s asistencí AI)
 
 set -e
@@ -17,7 +17,7 @@ echo "🐧 Vytvářím hlavní soubor app.py (může to chvíli trvat)..."
 cat > app.py << 'EOF'
 #!/usr/bin/env python3
 """
-MeowOS – optimalizovaná verze pro plynulý chod
+MeowOS – finální edice s profily, Bash a hrami (Pong, Snake, Tic‑Tac‑Toe)
 """
 
 import os
@@ -200,7 +200,7 @@ def run_code(code, lang):
             return "Nepodporovaný jazyk."
 
 # ============================================================================
-# HTML šablona s optimalizacemi
+# HTML šablona s optimalizacemi a hrami
 # ============================================================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -845,12 +845,10 @@ HTML_TEMPLATE = """
             active_profile: {{ active_profile|tojson }}
         };
 
-        // Oprava: pokud je tapeta prázdná, nastavíme výchozí
         if (!meowConfig.wallpaper || meowConfig.wallpaper.trim() === '') {
             meowConfig.wallpaper = 'linear-gradient(145deg, #0f172a, #1e1b2b)';
         }
 
-        // Nastavení CSS proměnných pro RGB barvu widgetů (kvůli rgba)
         document.documentElement.style.setProperty('--widget-bg-rgb', meowConfig.widget_bg_rgb);
     </script>
 
@@ -865,6 +863,7 @@ HTML_TEMPLATE = """
             <div class="taskbar-icon" onclick="openTerminal()"><i class="fa-solid fa-terminal"></i></div>
             <div class="taskbar-icon" onclick="openCalculator()"><i class="fa-solid fa-calculator"></i></div>
             <div class="taskbar-icon" onclick="openCodeEditor()"><i class="fa-solid fa-code"></i></div>
+            <div class="taskbar-icon" onclick="openGameSelector()"><i class="fa-solid fa-gamepad"></i></div>
         </div>
         <div class="taskbar-right">
             <div class="taskbar-icon" onclick="openSettings()"><i class="fa-solid fa-gear"></i></div>
@@ -888,6 +887,7 @@ HTML_TEMPLATE = """
             <div class="start-app" onclick="openThisPC()"><i class="fa-solid fa-computer"></i><span>Tento PC</span></div>
             <div class="start-app" onclick="openBrowserWindow()"><i class="fa-solid fa-globe"></i><span>Prohlížeč</span></div>
             <div class="start-app" onclick="openCodeEditor()"><i class="fa-solid fa-code"></i><span>Code Editor</span></div>
+            <div class="start-app" onclick="openGameSelector()"><i class="fa-solid fa-gamepad"></i><span>Hry</span></div>
             <div class="start-app" onclick="openApp('calendar')"><i class="fa-regular fa-calendar"></i><span>Kalendář</span></div>
         </div>
     </div>
@@ -904,7 +904,6 @@ HTML_TEMPLATE = """
         let terminalHistory = [];
         let historyIndex = -1;
 
-        // Throttling pro události pohybu myši
         let resizeHoverThrottle = false;
         let dragThrottle = false;
         let resizeThrottle = false;
@@ -973,7 +972,6 @@ HTML_TEMPLATE = """
             return id;
         }
 
-        // ======== PŘESUN ========
         function startDrag(e, win) {
             if (e.target.closest('.window-btn') || resizeData) return;
             draggedWindow = win;
@@ -1015,7 +1013,6 @@ HTML_TEMPLATE = """
             document.removeEventListener('mouseup', stopDrag);
         }
 
-        // ======== ZMĚNA VELIKOSTI ========
         function onResizeHover(e) {
             const win = e.currentTarget;
             if (resizeData || win.classList.contains('maximized')) return;
@@ -1452,6 +1449,384 @@ HTML_TEMPLATE = """
             }, 100);
         }
 
+        // ==================== NOVÉ HRY ====================
+        function openGameSelector() {
+            const content = `
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; padding: 20px;">
+                    <div class="file-icon" onclick="openPong()">
+                        <i class="fa-solid fa-table-tennis-paddle-ball"></i>
+                        <span>Pong</span>
+                        <small>proti AI</small>
+                    </div>
+                    <div class="file-icon" onclick="openSnake()">
+                        <i class="fa-solid fa-worm"></i>
+                        <span>Had</span>
+                        <small>Snake</small>
+                    </div>
+                    <div class="file-icon" onclick="openTicTacToe()">
+                        <i class="fa-solid fa-hashtag"></i>
+                        <span>Piškvorky</span>
+                        <small>tic-tac-toe</small>
+                    </div>
+                </div>
+            `;
+            createWindow('Hry', content, 500, 300, 250, 150);
+        }
+
+        // PONG
+        function openPong() {
+            const gameId = 'pong-' + Date.now();
+            const content = `
+                <div style="width:100%; height:100%; display:flex; flex-direction:column;">
+                    <canvas id="${gameId}" width="600" height="400" style="flex:1; background:rgba(0,0,0,0.3); border-radius:8px;"></canvas>
+                    <div style="text-align:center; margin-top:8px; font-size:12px; opacity:0.7;">
+                        Ovládání: pohyb myší (levý pálka)
+                    </div>
+                </div>
+            `;
+            const winId = createWindow('Pong', content, 650, 500, 200, 150);
+            setTimeout(() => {
+                const canvas = document.getElementById(gameId);
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+
+                let ball = { x: 300, y: 200, dx: 4, dy: 4, radius: 8 };
+                let leftPaddle = { y: 160, width: 10, height: 80 };
+                let rightPaddle = { y: 160, width: 10, height: 80 };
+                let leftScore = 0, rightScore = 0;
+                let gameOver = false;
+                let animationId;
+
+                function draw() {
+                    ctx.clearRect(0, 0, 600, 400);
+                    ctx.fillStyle = 'rgba(255,255,255,0.1)';
+                    ctx.fillRect(0, 0, 600, 400);
+                    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(0, 0, 600, 400);
+
+                    ctx.fillStyle = 'rgba(192,132,252,0.8)';
+                    ctx.fillRect(20, leftPaddle.y, leftPaddle.width, leftPaddle.height);
+                    ctx.fillRect(570, rightPaddle.y, rightPaddle.width, rightPaddle.height);
+
+                    ctx.beginPath();
+                    ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI*2);
+                    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+                    ctx.shadowColor = 'rgba(192,132,252,0.5)';
+                    ctx.shadowBlur = 10;
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+
+                    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                    ctx.setLineDash([5, 5]);
+                    ctx.beginPath();
+                    ctx.moveTo(300, 0);
+                    ctx.lineTo(300, 400);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    ctx.font = '24px "Segoe UI"';
+                    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                    ctx.fillText(leftScore, 150, 50);
+                    ctx.fillText(rightScore, 450, 50);
+                }
+
+                function update() {
+                    if (gameOver) return;
+                    ball.x += ball.dx;
+                    ball.y += ball.dy;
+
+                    if (ball.y - ball.radius < 0 || ball.y + ball.radius > 400) {
+                        ball.dy *= -1;
+                    }
+
+                    rightPaddle.y += (ball.y - (rightPaddle.y + rightPaddle.height/2)) * 0.1;
+                    rightPaddle.y = Math.max(0, Math.min(320, rightPaddle.y));
+
+                    if (ball.x - ball.radius < 30 && 
+                        ball.y > leftPaddle.y && 
+                        ball.y < leftPaddle.y + leftPaddle.height) {
+                        ball.dx = Math.abs(ball.dx);
+                        ball.x = 30 + ball.radius;
+                    }
+
+                    if (ball.x + ball.radius > 570 && 
+                        ball.y > rightPaddle.y && 
+                        ball.y < rightPaddle.y + rightPaddle.height) {
+                        ball.dx = -Math.abs(ball.dx);
+                        ball.x = 570 - ball.radius;
+                    }
+
+                    if (ball.x - ball.radius < 0) {
+                        rightScore++;
+                        resetBall();
+                    }
+                    if (ball.x + ball.radius > 600) {
+                        leftScore++;
+                        resetBall();
+                    }
+
+                    draw();
+                    animationId = requestAnimationFrame(update);
+                }
+
+                function resetBall() {
+                    ball.x = 300;
+                    ball.y = 200;
+                    ball.dx = (Math.random() > 0.5 ? 4 : -4);
+                    ball.dy = (Math.random() > 0.5 ? 3 : -3);
+                }
+
+                canvas.addEventListener('mousemove', (e) => {
+                    const rect = canvas.getBoundingClientRect();
+                    const scaleY = canvas.height / rect.height;
+                    let mouseY = (e.clientY - rect.top) * scaleY;
+                    leftPaddle.y = Math.max(0, Math.min(320, mouseY - leftPaddle.height/2));
+                });
+
+                resetBall();
+                update();
+
+                const checkInterval = setInterval(() => {
+                    if (!document.getElementById(winId)) {
+                        cancelAnimationFrame(animationId);
+                        clearInterval(checkInterval);
+                    }
+                }, 1000);
+            }, 100);
+        }
+
+        // HAD (Snake)
+        function openSnake() {
+            const gameId = 'snake-' + Date.now();
+            const content = `
+                <div style="width:100%; height:100%; display:flex; flex-direction:column; align-items:center;">
+                    <canvas id="${gameId}" width="400" height="400" style="background:rgba(0,0,0,0.3); border-radius:8px;"></canvas>
+                    <div style="margin-top:8px; font-size:12px; opacity:0.7;">
+                        Ovládání: šipky, mezerník pro restart
+                    </div>
+                </div>
+            `;
+            const winId = createWindow('Had', content, 450, 500, 250, 150);
+            setTimeout(() => {
+                const canvas = document.getElementById(gameId);
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+
+                const gridSize = 20;
+                const tileCount = 20;
+                let snake = [{x:10, y:10}];
+                let direction = {x:0, y:0};
+                let food = {x:15, y:15};
+                let score = 0;
+                let gameOver = false;
+                let animationId;
+
+                function draw() {
+                    ctx.clearRect(0, 0, 400, 400);
+                    ctx.fillStyle = 'rgba(255,255,255,0.05)';
+                    ctx.fillRect(0, 0, 400, 400);
+
+                    ctx.fillStyle = 'rgba(255,100,100,0.8)';
+                    ctx.shadowColor = 'rgba(255,100,100,0.5)';
+                    ctx.shadowBlur = 10;
+                    ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize-2, gridSize-2);
+                    ctx.shadowBlur = 0;
+
+                    snake.forEach((segment, i) => {
+                        const alpha = 1 - i * 0.03;
+                        ctx.fillStyle = `rgba(192,132,252,${alpha})`;
+                        ctx.shadowColor = 'rgba(192,132,252,0.5)';
+                        ctx.shadowBlur = 8;
+                        ctx.fillRect(segment.x * gridSize, segment.y * gridSize, gridSize-2, gridSize-2);
+                    });
+                    ctx.shadowBlur = 0;
+
+                    ctx.font = '16px "Segoe UI"';
+                    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                    ctx.fillText(`Skóre: ${score}`, 10, 30);
+                }
+
+                function update() {
+                    if (gameOver) return;
+
+                    const head = {x: snake[0].x + direction.x, y: snake[0].y + direction.y};
+
+                    if (head.x < 0 || head.x >= tileCount || head.y < 0 || head.y >= tileCount) {
+                        gameOver = true;
+                        drawGameOver();
+                        return;
+                    }
+
+                    if (snake.some(s => s.x === head.x && s.y === head.y)) {
+                        gameOver = true;
+                        drawGameOver();
+                        return;
+                    }
+
+                    snake.unshift(head);
+
+                    if (head.x === food.x && head.y === food.y) {
+                        score++;
+                        food.x = Math.floor(Math.random() * tileCount);
+                        food.y = Math.floor(Math.random() * tileCount);
+                    } else {
+                        snake.pop();
+                    }
+
+                    draw();
+                    animationId = requestAnimationFrame(update);
+                }
+
+                function drawGameOver() {
+                    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                    ctx.fillRect(0, 0, 400, 400);
+                    ctx.font = '20px "Segoe UI"';
+                    ctx.fillStyle = 'white';
+                    ctx.fillText('Konec hry', 140, 200);
+                }
+
+                window.addEventListener('keydown', (e) => {
+                    if (e.key.startsWith('Arrow')) e.preventDefault();
+                    if (gameOver && e.key === ' ') {
+                        snake = [{x:10, y:10}];
+                        direction = {x:0, y:0};
+                        food = {x:15, y:15};
+                        score = 0;
+                        gameOver = false;
+                        update();
+                        return;
+                    }
+                    switch(e.key) {
+                        case 'ArrowUp': if (direction.y === 0) direction = {x:0, y:-1}; break;
+                        case 'ArrowDown': if (direction.y === 0) direction = {x:0, y:1}; break;
+                        case 'ArrowLeft': if (direction.x === 0) direction = {x:-1, y:0}; break;
+                        case 'ArrowRight': if (direction.x === 0) direction = {x:1, y:0}; break;
+                    }
+                });
+
+                update();
+
+                const checkInterval = setInterval(() => {
+                    if (!document.getElementById(winId)) {
+                        cancelAnimationFrame(animationId);
+                        clearInterval(checkInterval);
+                    }
+                }, 1000);
+            }, 100);
+        }
+
+        // Tic-Tac-Toe
+        function openTicTacToe() {
+            const gameId = 'tictactoe-' + Date.now();
+            let board = ['', '', '', '', '', '', '', '', ''];
+            let currentPlayer = 'X';
+            let gameOver = false;
+
+            const content = `
+                <div style="width:100%; height:100%; display:flex; flex-direction:column; align-items:center;">
+                    <div id="${gameId}-board" style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px; width:240px; height:240px; margin:20px auto;"></div>
+                    <div id="${gameId}-status" style="margin-top:10px; font-size:16px;">Na tahu: X (ty)</div>
+                    <button class="window-btn" onclick="resetTTT('${gameId}')" style="margin-top:10px; width:auto; padding:5px 15px;">Nová hra</button>
+                </div>
+            `;
+            const winId = createWindow('Piškvorky', content, 350, 400, 280, 170);
+            setTimeout(() => {
+                const boardDiv = document.getElementById(`${gameId}-board`);
+                const statusDiv = document.getElementById(`${gameId}-status`);
+                if (!boardDiv) return;
+
+                function renderBoard() {
+                    boardDiv.innerHTML = '';
+                    board.forEach((cell, index) => {
+                        const cellDiv = document.createElement('div');
+                        cellDiv.style.width = '80px';
+                        cellDiv.style.height = '80px';
+                        cellDiv.style.background = 'rgba(255,255,255,0.1)';
+                        cellDiv.style.borderRadius = '8px';
+                        cellDiv.style.display = 'flex';
+                        cellDiv.style.alignItems = 'center';
+                        cellDiv.style.justifyContent = 'center';
+                        cellDiv.style.fontSize = '40px';
+                        cellDiv.style.color = 'white';
+                        cellDiv.style.textShadow = '0 0 10px rgba(192,132,252,0.5)';
+                        cellDiv.style.cursor = 'pointer';
+                        cellDiv.innerText = cell;
+                        cellDiv.onclick = () => playerMove(index);
+                        boardDiv.appendChild(cellDiv);
+                    });
+                }
+
+                function checkWinner() {
+                    const lines = [
+                        [0,1,2], [3,4,5], [6,7,8],
+                        [0,3,6], [1,4,7], [2,5,8],
+                        [0,4,8], [2,4,6]
+                    ];
+                    for (let line of lines) {
+                        const [a,b,c] = line;
+                        if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+                            return board[a];
+                        }
+                    }
+                    if (board.every(cell => cell !== '')) return 'tie';
+                    return null;
+                }
+
+                function playerMove(index) {
+                    if (gameOver || board[index] !== '' || currentPlayer !== 'X') return;
+                    board[index] = 'X';
+                    renderBoard();
+                    const win = checkWinner();
+                    if (win) {
+                        gameOver = true;
+                        if (win === 'X') statusDiv.innerText = 'Vyhrál jsi!';
+                        else if (win === 'O') statusDiv.innerText = 'Vyhrála AI!';
+                        else statusDiv.innerText = 'Remíza!';
+                        return;
+                    }
+                    currentPlayer = 'O';
+                    statusDiv.innerText = 'Na tahu: AI...';
+                    setTimeout(aiMove, 300);
+                }
+
+                function aiMove() {
+                    if (gameOver) return;
+                    const empty = board.reduce((acc, cell, idx) => cell === '' ? [...acc, idx] : acc, []);
+                    if (empty.length === 0) {
+                        const win = checkWinner();
+                        if (win === 'tie') statusDiv.innerText = 'Remíza!';
+                        gameOver = true;
+                        return;
+                    }
+                    const move = empty[Math.floor(Math.random() * empty.length)];
+                    board[move] = 'O';
+                    renderBoard();
+                    const win = checkWinner();
+                    if (win) {
+                        gameOver = true;
+                        if (win === 'O') statusDiv.innerText = 'Vyhrála AI!';
+                        else if (win === 'X') statusDiv.innerText = 'Vyhrál jsi!';
+                        else statusDiv.innerText = 'Remíza!';
+                        return;
+                    }
+                    currentPlayer = 'X';
+                    statusDiv.innerText = 'Na tahu: X (ty)';
+                }
+
+                window.resetTTT = (id) => {
+                    board = ['', '', '', '', '', '', '', '', ''];
+                    currentPlayer = 'X';
+                    gameOver = false;
+                    renderBoard();
+                    statusDiv.innerText = 'Na tahu: X (ty)';
+                };
+
+                renderBoard();
+            }, 100);
+        }
+
+        // ========================= NASTAVENÍ =========================
         function openSettings() {
             fetch('/api/system-info')
                 .then(r => r.json())
