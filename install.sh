@@ -1,5 +1,5 @@
 #!/bin/bash
-# MeowOS Arch – Finální Hyprland edice
+# MeowOS – finální verze s resize ze všech stran
 # Autor: Jakub (s asistencí AI)
 
 set -e
@@ -9,18 +9,15 @@ sudo apt update
 sudo apt install -y python3-flask python3-psutil wireless-tools
 
 echo "📁 Vytvářím složku pro aplikaci..."
-mkdir -p ~/meowos-arch
-cd ~/meowos-arch
+mkdir -p ~/meowos
+cd ~/meowos
 
 echo "🐧 Vytvářím hlavní soubor app.py (může to chvíli trvat)..."
 
 cat > app.py << 'EOF'
 #!/usr/bin/env python3
 """
-MeowOS Arch – Hyprland edice
-- Ostré barvy, vyšší průhlednost, minimalismus.
-- Opravené Nastavení (funkční všechny karty).
-- Vylepšená kalkulačka.
+MeowOS – finální edice s resize ze všech stran
 """
 
 import os
@@ -36,14 +33,14 @@ app = Flask(__name__)
 # ============================================================================
 # Konfigurace
 # ============================================================================
-CONFIG_FILE = os.path.expanduser('~/meowos-arch/config.json')
+CONFIG_FILE = os.path.expanduser('~/meowos/config.json')
 
 DEFAULT_CONFIG = {
     'username': 'jakub',
     'wallpaper': 'linear-gradient(145deg, #0f172a, #1e1b2b)',
-    'primary_color': '#c084fc',        # světle fialová jako akcent
-    'widget_bg_color': '#0a0a0f',       # velmi tmavá, téměř černá
-    'widget_opacity': 0.85,
+    'primary_color': '#c084fc',
+    'widget_bg_color': '#0a0a0f',
+    'widget_opacity': 0.8,
     'theme': 'dark',
     'font_size': '13px',
     'avatar': 'user-astronaut',
@@ -131,7 +128,7 @@ def get_system_info():
     }
 
 # ============================================================================
-# HTML šablona – Hyprland styl
+# HTML šablona
 # ============================================================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -139,7 +136,7 @@ HTML_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MeowOS Arch · Hyprland</title>
+    <title>MeowOS</title>
     <style>
         * {
             margin: 0;
@@ -160,7 +157,6 @@ HTML_TEMPLATE = """
             --default-win-height: {{ default_window_height }}px;
             --border-radius: 12px;
             --border-size: 1px;
-            --gap: 8px;
         }
 
         body {
@@ -200,8 +196,6 @@ HTML_TEMPLATE = """
             flex-direction: column;
             z-index: 10;
             color: var(--text-color);
-            resize: both;
-            overflow: auto;
             transition: box-shadow 0.2s ease;
         }
         .window:active {
@@ -229,6 +223,9 @@ HTML_TEMPLATE = """
             user-select: none;
             border-bottom: 1px solid rgba(255,255,255,0.1);
         }
+        .window-header:active {
+            cursor: grabbing;
+        }
         .window-title {
             color: var(--primary);
             font-size: 13px;
@@ -253,10 +250,11 @@ HTML_TEMPLATE = """
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: 0.15s;
+            transition: transform 0.15s ease, background-color 0.15s ease;
         }
         .window-btn:hover {
-            background: rgba(255,255,255,0.15);
+            transform: scale(1.15);
+            background: rgba(255,255,255,0.2);
         }
         .close-btn:hover {
             background: #c42b1c !important;
@@ -457,6 +455,7 @@ HTML_TEMPLATE = """
             padding: 12px;
             background: rgba(0,0,0,0.3);
             border-radius: 10px;
+            height: 100%;
         }
         .calc-display {
             grid-column: span 4;
@@ -661,6 +660,7 @@ HTML_TEMPLATE = """
         let zIndexCounter = 100;
         let draggedWindow = null;
         let dragOffsetX, dragOffsetY;
+        let resizeData = null; // { win, edge, startX, startY, startWidth, startHeight, startLeft, startTop }
         let startMenuVisible = false;
         let terminalHistory = [];
         let historyIndex = -1;
@@ -714,15 +714,21 @@ HTML_TEMPLATE = """
             winDiv.appendChild(content);
             desktop.appendChild(winDiv);
 
+            // Události pro přesun (hlavička)
             header.addEventListener('mousedown', (e) => startDrag(e, winDiv));
-            winDiv.addEventListener('mousedown', () => bringToFront(winDiv));
+            // Události pro změnu velikosti (zachytáváme na celém okně, ale přes hlavičku se bude přesouvat)
+            winDiv.addEventListener('mousemove', onResizeHover);
+            winDiv.addEventListener('mousedown', (e) => startResize(e, winDiv));
+            winDiv.addEventListener('mouseup', stopResize);
+            winDiv.addEventListener('mouseleave', stopResize);
 
             windows.push({ id, element: winDiv });
             return id;
         }
 
+        // ======== PŘESUN ========
         function startDrag(e, win) {
-            if (e.target.closest('.window-btn')) return;
+            if (e.target.closest('.window-btn') || resizeData) return;
             draggedWindow = win;
             const rect = win.getBoundingClientRect();
             dragOffsetX = e.clientX - rect.left;
@@ -751,6 +757,113 @@ HTML_TEMPLATE = """
             document.removeEventListener('mouseup', stopDrag);
         }
 
+        // ======== ZMĚNA VELIKOSTI ========
+        function onResizeHover(e) {
+            const win = e.currentTarget;
+            if (resizeData || win.classList.contains('maximized')) return;
+            const rect = win.getBoundingClientRect();
+            const edge = getResizeEdge(e.clientX, e.clientY, rect);
+            const style = getComputedStyle(win);
+            const isResizable = style.resize !== 'none' && !win.classList.contains('maximized');
+            if (!isResizable) return;
+
+            switch (edge) {
+                case 'n': win.style.cursor = 'n-resize'; break;
+                case 's': win.style.cursor = 's-resize'; break;
+                case 'e': win.style.cursor = 'e-resize'; break;
+                case 'w': win.style.cursor = 'w-resize'; break;
+                case 'ne': win.style.cursor = 'ne-resize'; break;
+                case 'nw': win.style.cursor = 'nw-resize'; break;
+                case 'se': win.style.cursor = 'se-resize'; break;
+                case 'sw': win.style.cursor = 'sw-resize'; break;
+                default: win.style.cursor = 'default';
+            }
+        }
+
+        function getResizeEdge(mx, my, rect) {
+            const edgeSize = 8;
+            const top = my <= rect.top + edgeSize;
+            const bottom = my >= rect.bottom - edgeSize;
+            const left = mx <= rect.left + edgeSize;
+            const right = mx >= rect.right - edgeSize;
+
+            if (top && left) return 'nw';
+            if (top && right) return 'ne';
+            if (bottom && left) return 'sw';
+            if (bottom && right) return 'se';
+            if (top) return 'n';
+            if (bottom) return 's';
+            if (left) return 'w';
+            if (right) return 'e';
+            return null;
+        }
+
+        function startResize(e, win) {
+            if (e.target.closest('.window-btn') || draggedWindow || win.classList.contains('maximized')) return;
+            const edge = getResizeEdge(e.clientX, e.clientY, win.getBoundingClientRect());
+            if (!edge) return;
+
+            const rect = win.getBoundingClientRect();
+            resizeData = {
+                win,
+                edge,
+                startX: e.clientX,
+                startY: e.clientY,
+                startWidth: rect.width,
+                startHeight: rect.height,
+                startLeft: rect.left,
+                startTop: rect.top
+            };
+            document.addEventListener('mousemove', onResize);
+            document.addEventListener('mouseup', stopResize);
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        function onResize(e) {
+            if (!resizeData) return;
+            const { win, edge, startX, startY, startWidth, startHeight, startLeft, startTop } = resizeData;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            const desktop = document.getElementById('desktop');
+            const minW = 300, minH = 200;
+            const maxW = desktop.clientWidth - startLeft;
+            const maxH = desktop.clientHeight - startTop - 48; // odečteme taskbar
+
+            let newWidth = startWidth;
+            let newHeight = startHeight;
+            let newLeft = startLeft;
+            let newTop = startTop;
+
+            if (edge.includes('e')) {
+                newWidth = Math.min(maxW, Math.max(minW, startWidth + dx));
+            }
+            if (edge.includes('w')) {
+                const change = Math.min(startLeft, Math.max(-(startWidth - minW), dx));
+                newWidth = startWidth - change;
+                newLeft = startLeft + change;
+            }
+            if (edge.includes('s')) {
+                newHeight = Math.min(maxH, Math.max(minH, startHeight + dy));
+            }
+            if (edge.includes('n')) {
+                const change = Math.min(startTop, Math.max(-(startHeight - minH), dy));
+                newHeight = startHeight - change;
+                newTop = startTop + change;
+            }
+
+            win.style.width = newWidth + 'px';
+            win.style.height = newHeight + 'px';
+            win.style.left = newLeft + 'px';
+            win.style.top = newTop + 'px';
+        }
+
+        function stopResize() {
+            resizeData = null;
+            document.removeEventListener('mousemove', onResize);
+            document.removeEventListener('mouseup', stopResize);
+        }
+
         function bringToFront(win) {
             win.style.zIndex = ++zIndexCounter;
         }
@@ -764,6 +877,8 @@ HTML_TEMPLATE = """
             if (!win) return;
             win.classList.toggle('maximized');
             win.classList.remove('minimized');
+            // Vrátíme výchozí kurzor
+            win.style.cursor = 'default';
         }
 
         function closeWindow(id) {
@@ -876,7 +991,6 @@ HTML_TEMPLATE = """
         }
 
         function openCalculator() {
-            // O 15% delší – 300px na 345px, 380px na 437px (zaokrouhleno)
             createWindow('Kalkulačka', `
                 <div class="calculator">
                     <div class="calc-display" id="calc-display">0</div>
@@ -898,7 +1012,7 @@ HTML_TEMPLATE = """
                     <button class="calc-btn operator" onclick="calcOperator('+')">+</button>
                     <button class="calc-btn" style="grid-column: span 4;" onclick="calcClear()">C</button>
                 </div>
-            `, 300, 437, 220, 180);  // výška 380 → 437 (o 15 % více)
+            `, 350, 500, 220, 180);
         }
 
         window.calcInput = function(d) {
@@ -930,7 +1044,7 @@ HTML_TEMPLATE = """
             createWindow('Prohlížeč', `
                 <div style="padding: 20px;">
                     <div class="browser-input">
-                        <input type="text" id="browser-url" placeholder="Zadejte URL (např. https://archlinux.org)">
+                        <input type="text" id="browser-url" placeholder="Zadejte URL (např. https://seznam.cz)">
                         <button class="settings-btn" onclick="navigateBrowser()">Otevřít</button>
                     </div>
                     <p style="color: #aaa; font-size: 12px;">Stránka se otevře v novém okně tvého prohlížeče.</p>
@@ -966,7 +1080,7 @@ HTML_TEMPLATE = """
             if (app === 'calendar') createWindow('Kalendář', '<div style="padding:20px; text-align:center;">Kalendář (demo)</div>', 400, 300, 200, 150);
         }
 
-        // ========================= NASTAVENÍ (OPRAVENÉ) =========================
+        // ========================= NASTAVENÍ =========================
         function openSettings() {
             fetch('/api/system-info')
                 .then(r => r.json())
@@ -1015,7 +1129,7 @@ HTML_TEMPLATE = """
                                 </div>
                                 <div class="settings-row">
                                     <div class="settings-label">Průhlednost (${Math.round(meowConfig.widget_opacity*100)}%)</div>
-                                    <input type="range" min="0.4" max="1" step="0.05" value="${meowConfig.widget_opacity}" class="slider" id="widget-opacity-slider">
+                                    <input type="range" min="0.1" max="1" step="0.05" value="${meowConfig.widget_opacity}" class="slider" id="widget-opacity-slider">
                                 </div>
                                 <div class="settings-row">
                                     <div class="settings-label">Barevný režim</div>
@@ -1087,7 +1201,7 @@ HTML_TEMPLATE = """
                             <div id="settings-o-aplikaci" class="settings-panel">
                                 <div style="text-align:center;">
                                     <i class="fa-brands fa-linux" style="font-size:64px;"></i>
-                                    <h3>MeowOS Arch · Hyprland</h3>
+                                    <h3>MeowOS</h3>
                                     <p>Finální edice 2026</p>
                                 </div>
                             </div>
@@ -1095,12 +1209,10 @@ HTML_TEMPLATE = """
                     `;
                     const winId = createWindow('Nastavení', content, 780, 580, 140, 70);
 
-                    // Inicializace posluchačů uvnitř okna (po vytvoření DOM)
                     setTimeout(() => {
                         const container = document.querySelector(`#${winId} .settings-container`);
                         if (!container) return;
 
-                        // Přepínání karet
                         container.querySelectorAll('.settings-tab').forEach(tab => {
                             tab.addEventListener('click', (e) => {
                                 container.querySelectorAll('.settings-tab').forEach(t => t.classList.remove('active'));
@@ -1111,7 +1223,6 @@ HTML_TEMPLATE = """
                             });
                         });
 
-                        // Tapety z předvoleb
                         container.querySelectorAll('.wallpaper-option').forEach(el => {
                             el.addEventListener('click', () => {
                                 const wall = el.dataset.wall;
@@ -1119,7 +1230,6 @@ HTML_TEMPLATE = """
                             });
                         });
 
-                        // URL tapeta
                         const urlBtn = container.querySelector('#set-wallpaper-url');
                         if (urlBtn) {
                             urlBtn.addEventListener('click', () => {
@@ -1128,37 +1238,31 @@ HTML_TEMPLATE = """
                             });
                         }
 
-                        // Primární barva
                         const primaryInput = container.querySelector('#primary-color');
                         if (primaryInput) {
                             primaryInput.addEventListener('change', (e) => changePrimaryColor(e.target.value));
                         }
 
-                        // Barva widgetů
                         const widgetBgInput = container.querySelector('#widget-bg-color');
                         if (widgetBgInput) {
                             widgetBgInput.addEventListener('change', (e) => changeWidgetBgColor(e.target.value));
                         }
 
-                        // Průhlednost
                         const opacitySlider = container.querySelector('#widget-opacity-slider');
                         if (opacitySlider) {
                             opacitySlider.addEventListener('input', (e) => changeWidgetOpacity(e.target.value));
                         }
 
-                        // Režim
                         const themeSelect = container.querySelector('#theme-select');
                         if (themeSelect) {
                             themeSelect.addEventListener('change', (e) => changeTheme(e.target.value));
                         }
 
-                        // Velikost písma
                         const fontSizeSelect = container.querySelector('#font-size');
                         if (fontSizeSelect) {
                             fontSizeSelect.addEventListener('change', (e) => changeFontSize(e.target.value));
                         }
 
-                        // Velikost oken
                         const saveWinBtn = container.querySelector('#save-window-size');
                         if (saveWinBtn) {
                             saveWinBtn.addEventListener('click', () => {
@@ -1168,7 +1272,6 @@ HTML_TEMPLATE = """
                             });
                         }
 
-                        // Uživatel
                         const saveUserBtn = container.querySelector('#save-user-settings');
                         if (saveUserBtn) {
                             saveUserBtn.addEventListener('click', () => {
@@ -1178,19 +1281,16 @@ HTML_TEMPLATE = """
                             });
                         }
 
-                        // Wi-Fi
                         const wifiCheck = container.querySelector('#wifi-checkbox');
                         if (wifiCheck) {
                             wifiCheck.addEventListener('change', (e) => toggleWifi(e.target.checked));
                         }
 
-                        // Hlasitost
                         const volumeSlider = container.querySelector('#volume-slider');
                         if (volumeSlider) {
                             volumeSlider.addEventListener('input', (e) => changeVolume(e.target.value));
                         }
 
-                        // Napájení
                         const restartBtn = container.querySelector('#restart-btn');
                         if (restartBtn) restartBtn.addEventListener('click', () => powerAction('restart'));
                         const shutdownBtn = container.querySelector('#shutdown-btn');
@@ -1354,7 +1454,7 @@ def api_set_widget_bg():
 @app.route('/api/set-widget-opacity', methods=['POST'])
 def api_set_widget_opacity():
     config = load_config()
-    config['widget_opacity'] = float(request.form.get('opacity', 0.85))
+    config['widget_opacity'] = float(request.form.get('opacity', 0.8))
     save_config(config)
     return 'OK'
 
@@ -1411,6 +1511,6 @@ EOF
 echo "✅ Aplikace vytvořena."
 echo "🚀 Spouštím server..."
 echo "Připoj se na http://$(hostname -I | awk '{print $1}'):5000"
-cd ~/meowos-arch
+cd ~/meowos
 python3 app.py
 EOF
