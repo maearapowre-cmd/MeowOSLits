@@ -1,5 +1,5 @@
 #!/bin/bash
-# MeowOS – finální edice s profily nastavení a podporou Bash
+# MeowOS – finální edice s profily, Bash a opraveným načítáním tapet
 # Autor: Jakub (s asistencí AI)
 
 set -e
@@ -50,8 +50,8 @@ DEFAULT_CONFIG = {
     'volume': 80,
     'default_window_width': 640,
     'default_window_height': 440,
-    'taskbar_position': 'bottom',  # 'top' nebo 'bottom'
-    'profiles': {                   # slovník pojmenovaných profilů
+    'taskbar_position': 'bottom',
+    'profiles': {
         'Výchozí': {
             'wallpaper': 'linear-gradient(145deg, #0f172a, #1e1b2b)',
             'primary_color': '#c084fc',
@@ -70,24 +70,18 @@ def load_config():
         try:
             with open(CONFIG_FILE, 'r') as f:
                 config = json.load(f)
-                # doplnění chybějících klíčů
                 for k, v in DEFAULT_CONFIG.items():
                     if k not in config:
                         config[k] = v
-                # zajistit, že profil 'Výchozí' vždy existuje
                 if 'profiles' not in config:
                     config['profiles'] = {}
                 if 'Výchozí' not in config['profiles']:
                     config['profiles']['Výchozí'] = DEFAULT_CONFIG.copy()
-                    del config['profiles']['Výchozí']['profiles']
-                    del config['profiles']['Výchozí']['active_profile']
-                    del config['profiles']['Výchozí']['username']
-                    del config['profiles']['Výchozí']['avatar']
-                    del config['profiles']['Výchozí']['wifi_enabled']
-                    del config['profiles']['Výchozí']['volume']
-                    del config['profiles']['Výchozí']['default_window_width']
-                    del config['profiles']['Výchozí']['default_window_height']
-                    del config['profiles']['Výchozí']['taskbar_position']
+                    for key in ['username', 'avatar', 'wifi_enabled', 'volume', 
+                                'default_window_width', 'default_window_height', 
+                                'taskbar_position', 'profiles', 'active_profile']:
+                        if key in config['profiles']['Výchozí']:
+                            del config['profiles']['Výchozí'][key]
                 return config
         except:
             return DEFAULT_CONFIG.copy()
@@ -161,8 +155,7 @@ def get_system_info():
 # Spouštění kódu (včetně Bash)
 # ============================================================================
 def run_code(code, lang):
-    """Spustí kód v daném jazyce a vrátí výstup."""
-    timeout = 5  # sekund
+    timeout = 5
     with tempfile.TemporaryDirectory() as tmpdir:
         if lang == 'python':
             file_path = os.path.join(tmpdir, 'script.py')
@@ -260,7 +253,6 @@ HTML_TEMPLATE = """
             font-size: var(--font-size);
         }
 
-        /* Vlastní scrollbar */
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
@@ -286,7 +278,6 @@ HTML_TEMPLATE = """
             overflow: hidden;
         }
 
-        /* ==================== OKNA ==================== */
         .window {
             position: absolute;
             min-width: 300px;
@@ -374,7 +365,6 @@ HTML_TEMPLATE = """
             flex-direction: column;
         }
 
-        /* ==================== TASKBAR ==================== */
         #taskbar {
             position: fixed;
             {% if taskbar_position == 'bottom' %}
@@ -435,7 +425,6 @@ HTML_TEMPLATE = """
             border-radius: 20px;
         }
 
-        /* ==================== START MENU ==================== */
         #start-menu {
             position: fixed;
             {% if taskbar_position == 'bottom' %}
@@ -498,7 +487,6 @@ HTML_TEMPLATE = """
             text-align: center;
         }
 
-        /* ==================== PŘEHLED OKEN (OVERVIEW) ==================== */
         #overview {
             position: fixed;
             top: 0;
@@ -554,7 +542,6 @@ HTML_TEMPLATE = """
             color: var(--primary);
         }
 
-        /* ==================== IKONY ==================== */
         .icon-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
@@ -584,7 +571,6 @@ HTML_TEMPLATE = """
             filter: drop-shadow(0 6px 8px rgba(0,0,0,0.5));
         }
 
-        /* ==================== TERMINÁL (pro editor) ==================== */
         .editor-terminal {
             background: rgba(0,0,0,0.6);
             border-radius: 8px;
@@ -598,7 +584,6 @@ HTML_TEMPLATE = """
             white-space: pre-wrap;
         }
 
-        /* ==================== KALKULAČKA ==================== */
         .calculator {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -639,7 +624,6 @@ HTML_TEMPLATE = """
             background: color-mix(in srgb, var(--primary) 50%, transparent);
         }
 
-        /* ==================== CODE EDITOR ==================== */
         .code-editor-container {
             display: flex;
             flex-direction: column;
@@ -687,7 +671,6 @@ HTML_TEMPLATE = """
             border-right: 1px solid rgba(255,255,255,0.1);
         }
 
-        /* ==================== NASTAVENÍ ==================== */
         .settings-tabs {
             display: flex;
             gap: 5px;
@@ -798,7 +781,6 @@ HTML_TEMPLATE = """
             border-radius: 6px;
             color: white;
         }
-        /* ==================== PROFILY ==================== */
         .profiles-section {
             margin-top: 20px;
             padding-top: 15px;
@@ -876,9 +858,7 @@ HTML_TEMPLATE = """
         </div>
     </div>
 
-    <div id="overview" onclick="toggleOverview()">
-        <!-- Zde se dynamicky vloží miniatury oken -->
-    </div>
+    <div id="overview" onclick="toggleOverview()"></div>
 
     <div id="start-menu">
         <div class="start-header">
@@ -1129,7 +1109,6 @@ HTML_TEMPLATE = """
             windows = windows.filter(w => w.id !== id);
         }
 
-        // ========================= PŘEHLED OKEN =========================
         function toggleOverview() {
             const overview = document.getElementById('overview');
             if (!overviewVisible) {
@@ -1162,7 +1141,6 @@ HTML_TEMPLATE = """
             }
         }
 
-        // ========================= APLIKACE =========================
         function openFileManager() {
             createWindow('Správce souborů', `
                 <div style="display: flex; gap: 15px;">
@@ -1356,7 +1334,6 @@ HTML_TEMPLATE = """
             if (app === 'calendar') createWindow('Kalendář', '<div style="padding:20px; text-align:center;">Kalendář (demo)</div>', 400, 300, 200, 150);
         }
 
-        // ==================== CODE EDITOR ====================
         function openCodeEditor() {
             const editorId = 'editor-' + Date.now();
             const content = `
@@ -1422,7 +1399,6 @@ HTML_TEMPLATE = """
             }, 100);
         }
 
-        // ========================= NASTAVENÍ =========================
         function openSettings() {
             fetch('/api/system-info')
                 .then(r => r.json())
@@ -1434,8 +1410,8 @@ HTML_TEMPLATE = """
                             <div class="profile-item ${isActive ? 'profile-active' : ''}">
                                 <span class="profile-name">${profileName}</span>
                                 <div class="profile-actions">
-                                    <button onclick="loadProfile('${profileName}')" title="Načíst"><i class="fa-solid fa-rotate-right"></i></button>
-                                    ${profileName !== 'Výchozí' ? `<button onclick="deleteProfile('${profileName}')" title="Smazat"><i class="fa-solid fa-trash"></i></button>` : ''}
+                                    <button onclick="loadProfile('${profileName.replace(/'/g, "\\\\'")}')" title="Načíst"><i class="fa-solid fa-rotate-right"></i></button>
+                                    ${profileName !== 'Výchozí' ? `<button onclick="deleteProfile('${profileName.replace(/'/g, "\\\\'")}')" title="Smazat"><i class="fa-solid fa-trash"></i></button>` : ''}
                                 </div>
                             </div>
                         `;
@@ -1506,8 +1482,6 @@ HTML_TEMPLATE = """
                                         <option value="14px" ${meowConfig.font_size=='14px'?'selected':''}>Velká</option>
                                     </select>
                                 </div>
-
-                                <!-- Sekce pro profily -->
                                 <div class="profiles-section">
                                     <div class="settings-label">Uložené profily</div>
                                     <div id="profiles-list">
@@ -1692,7 +1666,6 @@ HTML_TEMPLATE = """
                         const shutdownBtn = container.querySelector('#shutdown-btn');
                         if (shutdownBtn) shutdownBtn.addEventListener('click', () => powerAction('shutdown'));
 
-                        // Profily
                         const saveProfileBtn = container.querySelector('#save-profile-btn');
                         if (saveProfileBtn) {
                             saveProfileBtn.addEventListener('click', () => {
@@ -1704,14 +1677,14 @@ HTML_TEMPLATE = """
                 });
         }
 
-        // ========================= FUNKCE PRO PROFILY =========================
         function loadProfile(name) {
             fetch('/api/load-profile', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/x-www-form-urlencoded'},
                 body: 'name=' + encodeURIComponent(name)
             }).then(() => {
-                location.reload();
+                // Vynutit nové načtení bez cache
+                window.location.href = window.location.href.split('?')[0] + '?t=' + Date.now();
             });
         }
 
@@ -1721,7 +1694,7 @@ HTML_TEMPLATE = """
                 headers: {'Content-Type': 'application/x-www-form-urlencoded'},
                 body: 'name=' + encodeURIComponent(name)
             }).then(() => {
-                location.reload();
+                window.location.href = window.location.href.split('?')[0] + '?t=' + Date.now();
             });
         }
 
@@ -1732,12 +1705,11 @@ HTML_TEMPLATE = """
                     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
                     body: 'name=' + encodeURIComponent(name)
                 }).then(() => {
-                    location.reload();
+                    window.location.href = window.location.href.split('?')[0] + '?t=' + Date.now();
                 });
             }
         }
 
-        // ========================= FUNKCE PRO NASTAVENÍ =========================
         function changeWallpaper(value) {
             document.body.style.setProperty('--wallpaper', value);
             fetch('/api/set-wallpaper', { method: 'POST', body: 'wallpaper=' + encodeURIComponent(value), headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
@@ -1808,7 +1780,6 @@ HTML_TEMPLATE = """
             else if (action === 'shutdown' && confirm('Opravdu vypnout?')) fetch('/api/shutdown');
         }
 
-        // ========================= START MENU =========================
         function toggleStartMenu() {
             const menu = document.getElementById('start-menu');
             startMenuVisible = !startMenuVisible;
@@ -1824,7 +1795,6 @@ HTML_TEMPLATE = """
             }
         });
 
-        // ========================= INICIALIZACE =========================
         window.onload = function() {
             openFileManager();
             openThisPC();
@@ -1969,7 +1939,6 @@ def api_set_volume():
 def api_save_profile():
     config = load_config()
     name = request.form.get('name', 'Nový profil')
-    # Uloží aktuální nastavení vzhledu do profilu
     profile = {
         'wallpaper': config['wallpaper'],
         'primary_color': config['primary_color'],
@@ -2001,7 +1970,6 @@ def api_delete_profile():
     if name in config['profiles'] and name != 'Výchozí':
         del config['profiles'][name]
         if config['active_profile'] == name:
-            # nastavit aktivní na Výchozí
             config['active_profile'] = 'Výchozí'
             config.update(config['profiles']['Výchozí'])
         save_config(config)
