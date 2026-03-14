@@ -1,6 +1,6 @@
 #!/bin/bash
-# MeowOS – final edition
-# Autor: meow with ai
+# MeowOS – finální edice s opraveným ukládáním profilů a tapet
+# Autor: Jakub (s asistencí AI)
 
 set -e
 
@@ -17,7 +17,7 @@ echo "🐧 Vytvářím hlavní soubor app.py (může to chvíli trvat)..."
 cat > app.py << 'EOF'
 #!/usr/bin/env python3
 """
-MeowOS – finální edice s profily, Bash a opravou prázdné tapety
+MeowOS – finální edice s profily, Bash a opravou ukládání tapet
 """
 
 import os
@@ -1682,6 +1682,7 @@ HTML_TEMPLATE = """
                 });
         }
 
+        // ========================= FUNKCE PRO PROFILY =========================
         function loadProfile(name) {
             fetch('/api/load-profile', {
                 method: 'POST',
@@ -1714,41 +1715,63 @@ HTML_TEMPLATE = """
             }
         }
 
+        // ========================= FUNKCE PRO NASTAVENÍ =========================
         function changeWallpaper(value) {
             document.body.style.setProperty('--wallpaper', value);
-            fetch('/api/set-wallpaper', { method: 'POST', body: 'wallpaper=' + encodeURIComponent(value), headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
+            fetch('/api/set-wallpaper', { method: 'POST', body: 'wallpaper=' + encodeURIComponent(value), headers: {'Content-Type': 'application/x-www-form-urlencoded'} })
+            .then(() => {
+                meowConfig.wallpaper = value; // aktualizujeme lokální konfig
+            });
         }
 
         function changePrimaryColor(value) {
             document.body.style.setProperty('--primary', value);
-            fetch('/api/set-primary', { method: 'POST', body: 'color=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
+            fetch('/api/set-primary', { method: 'POST', body: 'color=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} })
+            .then(() => {
+                meowConfig.primary_color = value;
+            });
         }
 
         function changeWidgetBgColor(value) {
             document.body.style.setProperty('--widget-bg', value);
-            fetch('/api/set-widget-bg', { method: 'POST', body: 'color=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
+            fetch('/api/set-widget-bg', { method: 'POST', body: 'color=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} })
+            .then(() => {
+                meowConfig.widget_bg_color = value;
+            });
         }
 
         function changeWidgetOpacity(value) {
             document.body.style.setProperty('--widget-opacity', value);
-            fetch('/api/set-widget-opacity', { method: 'POST', body: 'opacity=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
+            fetch('/api/set-widget-opacity', { method: 'POST', body: 'opacity=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} })
+            .then(() => {
+                meowConfig.widget_opacity = parseFloat(value);
+            });
         }
 
         function changeBlurIntensity(value) {
             document.body.style.setProperty('--blur-intensity', value + 'px');
-            fetch('/api/set-blur', { method: 'POST', body: 'blur=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
+            fetch('/api/set-blur', { method: 'POST', body: 'blur=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} })
+            .then(() => {
+                meowConfig.blur_intensity = parseInt(value);
+            });
         }
 
         function changeTheme(value) {
             const root = document.documentElement;
             root.style.setProperty('--theme', value);
             root.style.setProperty('--text-color', value === 'dark' ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.9)');
-            fetch('/api/set-theme', { method: 'POST', body: 'theme=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
+            fetch('/api/set-theme', { method: 'POST', body: 'theme=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} })
+            .then(() => {
+                meowConfig.theme = value;
+            });
         }
 
         function changeFontSize(value) {
             document.body.style.setProperty('--font-size', value);
-            fetch('/api/set-fontsize', { method: 'POST', body: 'size=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
+            fetch('/api/set-fontsize', { method: 'POST', body: 'size=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} })
+            .then(() => {
+                meowConfig.font_size = value;
+            });
         }
 
         function saveUserSettings(name, avatar) {
