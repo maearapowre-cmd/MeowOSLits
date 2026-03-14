@@ -1,6 +1,6 @@
 #!/bin/bash
-# MeowOS – finální edice s opraveným ukládáním profilů a tapet
-# Autor: meow with ai
+# MeowOS – optimalizovaná verze pro plynulý chod při více oknech
+# Autor: Jakub (s asistencí AI)
 
 set -e
 
@@ -17,7 +17,7 @@ echo "🐧 Vytvářím hlavní soubor app.py (může to chvíli trvat)..."
 cat > app.py << 'EOF'
 #!/usr/bin/env python3
 """
-MeowOS – finální edice s profily, Bash a opravou ukládání tapet
+MeowOS – optimalizovaná verze pro plynulý chod
 """
 
 import os
@@ -200,7 +200,7 @@ def run_code(code, lang):
             return "Nepodporovaný jazyk."
 
 # ============================================================================
-# HTML šablona
+# HTML šablona s optimalizacemi
 # ============================================================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -284,7 +284,7 @@ HTML_TEMPLATE = """
             min-height: 200px;
             width: var(--default-win-width);
             height: var(--default-win-height);
-            background: color-mix(in srgb, var(--widget-bg) calc(var(--widget-opacity) * 100%), transparent);
+            background: rgba(var(--widget-bg-rgb), calc(var(--widget-opacity) * 100%));
             backdrop-filter: blur(var(--blur-intensity));
             -webkit-backdrop-filter: blur(var(--blur-intensity));
             border: var(--border-size) solid rgba(255,255,255,0.1);
@@ -295,6 +295,7 @@ HTML_TEMPLATE = """
             z-index: 10;
             color: var(--text-color);
             transition: box-shadow 0.2s ease;
+            will-change: transform, opacity, left, top, width, height;
         }
         .window:active {
             box-shadow: 0 20px 45px rgba(0,0,0,0.8);
@@ -311,7 +312,7 @@ HTML_TEMPLATE = """
             display: none !important;
         }
         .window-header {
-            background: color-mix(in srgb, var(--widget-bg) 95%, black);
+            background: rgba(var(--widget-bg-rgb), 0.95);
             padding: 8px 12px;
             border-radius: var(--border-radius) var(--border-radius) 0 0;
             display: flex;
@@ -377,7 +378,7 @@ HTML_TEMPLATE = """
             left: 0;
             width: 100%;
             height: 48px;
-            background: color-mix(in srgb, var(--widget-bg) calc(var(--widget-opacity) * 100%), transparent);
+            background: rgba(var(--widget-bg-rgb), calc(var(--widget-opacity) * 100%));
             backdrop-filter: blur(var(--blur-intensity));
             -webkit-backdrop-filter: blur(var(--blur-intensity));
             border-{% if taskbar_position == 'bottom' %}top{% else %}bottom{% endif %}: var(--border-size) solid rgba(255,255,255,0.1);
@@ -435,7 +436,7 @@ HTML_TEMPLATE = """
             left: 50%;
             transform: translateX(-50%);
             width: 540px;
-            background: color-mix(in srgb, var(--widget-bg) calc(var(--widget-opacity) * 100%), transparent);
+            background: rgba(var(--widget-bg-rgb), calc(var(--widget-opacity) * 100%));
             backdrop-filter: blur(var(--blur-intensity));
             -webkit-backdrop-filter: blur(var(--blur-intensity));
             border-radius: 20px;
@@ -509,7 +510,7 @@ HTML_TEMPLATE = """
         .overview-window {
             width: 200px;
             height: 150px;
-            background: color-mix(in srgb, var(--widget-bg) 70%, transparent);
+            background: rgba(var(--widget-bg-rgb), 0.7);
             border-radius: 10px;
             border: 2px solid transparent;
             overflow: hidden;
@@ -524,7 +525,7 @@ HTML_TEMPLATE = """
             transform: scale(1.05);
         }
         .overview-header {
-            background: color-mix(in srgb, var(--widget-bg) 90%, black);
+            background: rgba(var(--widget-bg-rgb), 0.9);
             padding: 5px 8px;
             font-size: 12px;
             display: flex;
@@ -555,7 +556,7 @@ HTML_TEMPLATE = """
             gap: 6px;
             padding: 10px 4px;
             border-radius: 10px;
-            background: color-mix(in srgb, var(--widget-bg) 50%, transparent);
+            background: rgba(var(--widget-bg-rgb), 0.5);
             backdrop-filter: blur(calc(var(--blur-intensity)/2));
             border: var(--border-size) solid rgba(255,255,255,0.05);
             cursor: pointer;
@@ -818,11 +819,18 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <script>
+        // Pomocná funkce pro převod hex barvy na RGB
+        function hexToRgb(hex) {
+            const result = /^#?([a-f\\d]{2})([a-f\\d]{2})([a-f\\d]{2})$/i.exec(hex);
+            return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '10, 20, 30';
+        }
+
         window.meowConfig = {
             username: {{ username|tojson }},
             wallpaper: {{ wallpaper|tojson }},
             primary_color: {{ primary_color|tojson }},
             widget_bg_color: {{ widget_bg_color|tojson }},
+            widget_bg_rgb: hexToRgb({{ widget_bg_color|tojson }}),
             widget_opacity: {{ widget_opacity|tojson }},
             blur_intensity: {{ blur_intensity|tojson }},
             theme: {{ theme|tojson }},
@@ -841,6 +849,9 @@ HTML_TEMPLATE = """
         if (!meowConfig.wallpaper || meowConfig.wallpaper.trim() === '') {
             meowConfig.wallpaper = 'linear-gradient(145deg, #0f172a, #1e1b2b)';
         }
+
+        // Nastavení CSS proměnných pro RGB barvu widgetů (kvůli rgba)
+        document.documentElement.style.setProperty('--widget-bg-rgb', meowConfig.widget_bg_rgb);
     </script>
 
     <div id="desktop"></div>
@@ -892,6 +903,11 @@ HTML_TEMPLATE = """
         let overviewVisible = false;
         let terminalHistory = [];
         let historyIndex = -1;
+
+        // Throttling pro události pohybu myši
+        let resizeHoverThrottle = false;
+        let dragThrottle = false;
+        let resizeThrottle = false;
 
         // ========================= POMOCNÉ FUNKCE =========================
         function updateClock() {
@@ -948,7 +964,7 @@ HTML_TEMPLATE = """
             desktop.appendChild(winDiv);
 
             header.addEventListener('mousedown', (e) => startDrag(e, winDiv));
-            winDiv.addEventListener('mousemove', onResizeHover);
+            winDiv.addEventListener('mousemove', onResizeHoverThrottled);
             winDiv.addEventListener('mousedown', (e) => startResize(e, winDiv));
             winDiv.addEventListener('mouseup', stopResize);
             winDiv.addEventListener('mouseleave', stopResize);
@@ -957,13 +973,14 @@ HTML_TEMPLATE = """
             return id;
         }
 
+        // ======== PŘESUN ========
         function startDrag(e, win) {
             if (e.target.closest('.window-btn') || resizeData) return;
             draggedWindow = win;
             const rect = win.getBoundingClientRect();
             dragOffsetX = e.clientX - rect.left;
             dragOffsetY = e.clientY - rect.top;
-            document.addEventListener('mousemove', onDrag);
+            document.addEventListener('mousemove', onDragThrottled);
             document.addEventListener('mouseup', stopDrag);
             e.preventDefault();
         }
@@ -982,12 +999,23 @@ HTML_TEMPLATE = """
             draggedWindow.style.top = newY + 'px';
         }
 
+        const onDragThrottled = (e) => {
+            if (!dragThrottle) {
+                requestAnimationFrame(() => {
+                    onDrag(e);
+                    dragThrottle = false;
+                });
+                dragThrottle = true;
+            }
+        };
+
         function stopDrag() {
             draggedWindow = null;
-            document.removeEventListener('mousemove', onDrag);
+            document.removeEventListener('mousemove', onDragThrottled);
             document.removeEventListener('mouseup', stopDrag);
         }
 
+        // ======== ZMĚNA VELIKOSTI ========
         function onResizeHover(e) {
             const win = e.currentTarget;
             if (resizeData || win.classList.contains('maximized')) return;
@@ -1007,6 +1035,16 @@ HTML_TEMPLATE = """
                 default: win.style.cursor = 'default';
             }
         }
+
+        const onResizeHoverThrottled = (e) => {
+            if (!resizeHoverThrottle) {
+                requestAnimationFrame(() => {
+                    onResizeHover(e);
+                    resizeHoverThrottle = false;
+                });
+                resizeHoverThrottle = true;
+            }
+        };
 
         function getResizeEdge(mx, my, rect) {
             const edgeSize = 8;
@@ -1042,7 +1080,7 @@ HTML_TEMPLATE = """
                 startLeft: rect.left,
                 startTop: rect.top
             };
-            document.addEventListener('mousemove', onResize);
+            document.addEventListener('mousemove', onResizeThrottled);
             document.addEventListener('mouseup', stopResize);
             e.preventDefault();
             e.stopPropagation();
@@ -1087,9 +1125,19 @@ HTML_TEMPLATE = """
             win.style.top = newTop + 'px';
         }
 
+        const onResizeThrottled = (e) => {
+            if (!resizeThrottle) {
+                requestAnimationFrame(() => {
+                    onResize(e);
+                    resizeThrottle = false;
+                });
+                resizeThrottle = true;
+            }
+        };
+
         function stopResize() {
             resizeData = null;
-            document.removeEventListener('mousemove', onResize);
+            document.removeEventListener('mousemove', onResizeThrottled);
             document.removeEventListener('mouseup', stopResize);
         }
 
@@ -1720,7 +1768,7 @@ HTML_TEMPLATE = """
             document.body.style.setProperty('--wallpaper', value);
             fetch('/api/set-wallpaper', { method: 'POST', body: 'wallpaper=' + encodeURIComponent(value), headers: {'Content-Type': 'application/x-www-form-urlencoded'} })
             .then(() => {
-                meowConfig.wallpaper = value; // aktualizujeme lokální konfig
+                meowConfig.wallpaper = value;
             });
         }
 
@@ -1734,9 +1782,12 @@ HTML_TEMPLATE = """
 
         function changeWidgetBgColor(value) {
             document.body.style.setProperty('--widget-bg', value);
+            const rgb = hexToRgb(value);
+            document.documentElement.style.setProperty('--widget-bg-rgb', rgb);
             fetch('/api/set-widget-bg', { method: 'POST', body: 'color=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} })
             .then(() => {
                 meowConfig.widget_bg_color = value;
+                meowConfig.widget_bg_rgb = rgb;
             });
         }
 
