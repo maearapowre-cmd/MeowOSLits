@@ -1,5 +1,5 @@
 #!/bin/bash
-# MeowOS – finální verze s resize ze všech stran
+# MeowOS – kompletní edice s Code Editorem a nastavením blur
 # Autor: Jakub (s asistencí AI)
 
 set -e
@@ -17,7 +17,7 @@ echo "🐧 Vytvářím hlavní soubor app.py (může to chvíli trvat)..."
 cat > app.py << 'EOF'
 #!/usr/bin/env python3
 """
-MeowOS – finální edice s resize ze všech stran
+MeowOS – finální edice s Code Editorem a nastavením blur
 """
 
 import os
@@ -41,6 +41,7 @@ DEFAULT_CONFIG = {
     'primary_color': '#c084fc',
     'widget_bg_color': '#0a0a0f',
     'widget_opacity': 0.8,
+    'blur_intensity': 20,
     'theme': 'dark',
     'font_size': '13px',
     'avatar': 'user-astronaut',
@@ -137,6 +138,13 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MeowOS</title>
+    <!-- CodeMirror pro editor -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/theme/dracula.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/python/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/clike/clike.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/go/go.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -150,6 +158,7 @@ HTML_TEMPLATE = """
             --primary: {{ primary_color }};
             --widget-bg: {{ widget_bg_color }};
             --widget-opacity: {{ widget_opacity }};
+            --blur-intensity: {{ blur_intensity }}px;
             --theme: {{ theme }};
             --text-color: {% if theme == 'dark' %}rgba(255,255,255,0.9){% else %}rgba(0,0,0,0.9){% endif %};
             --font-size: {{ font_size }};
@@ -171,6 +180,23 @@ HTML_TEMPLATE = """
             font-size: var(--font-size);
         }
 
+        /* Vlastní scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.2);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
         #desktop {
             width: 100%;
             height: 100%;
@@ -187,8 +213,8 @@ HTML_TEMPLATE = """
             width: var(--default-win-width);
             height: var(--default-win-height);
             background: color-mix(in srgb, var(--widget-bg) calc(var(--widget-opacity) * 100%), transparent);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
+            backdrop-filter: blur(var(--blur-intensity));
+            -webkit-backdrop-filter: blur(var(--blur-intensity));
             border: var(--border-size) solid rgba(255,255,255,0.1);
             border-radius: var(--border-radius);
             box-shadow: 0 15px 35px rgba(0,0,0,0.6);
@@ -273,8 +299,8 @@ HTML_TEMPLATE = """
             width: 100%;
             height: 48px;
             background: color-mix(in srgb, var(--widget-bg) calc(var(--widget-opacity) * 100%), transparent);
-            backdrop-filter: blur(25px);
-            -webkit-backdrop-filter: blur(25px);
+            backdrop-filter: blur(var(--blur-intensity));
+            -webkit-backdrop-filter: blur(var(--blur-intensity));
             border-top: var(--border-size) solid rgba(255,255,255,0.1);
             display: flex;
             align-items: center;
@@ -328,8 +354,8 @@ HTML_TEMPLATE = """
             transform: translateX(-50%);
             width: 540px;
             background: color-mix(in srgb, var(--widget-bg) calc(var(--widget-opacity) * 100%), transparent);
-            backdrop-filter: blur(35px);
-            -webkit-backdrop-filter: blur(35px);
+            backdrop-filter: blur(var(--blur-intensity));
+            -webkit-backdrop-filter: blur(var(--blur-intensity));
             border-radius: 20px;
             border: var(--border-size) solid rgba(255,255,255,0.1);
             padding: 20px;
@@ -394,7 +420,7 @@ HTML_TEMPLATE = """
             padding: 10px 4px;
             border-radius: 10px;
             background: color-mix(in srgb, var(--widget-bg) 50%, transparent);
-            backdrop-filter: blur(8px);
+            backdrop-filter: blur(calc(var(--blur-intensity)/2));
             border: var(--border-size) solid rgba(255,255,255,0.05);
             cursor: pointer;
             transition: 0.15s;
@@ -486,6 +512,36 @@ HTML_TEMPLATE = """
         }
         .calc-btn.operator:hover {
             background: color-mix(in srgb, var(--primary) 50%, transparent);
+        }
+
+        /* ==================== CODE EDITOR ==================== */
+        .code-editor-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            gap: 10px;
+        }
+        .editor-toolbar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .editor-select {
+            background: rgba(0,0,0,0.4);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 6px;
+            padding: 4px 8px;
+        }
+        .CodeMirror {
+            height: 100%;
+            border-radius: 8px;
+            background: rgba(0,0,0,0.3);
+            color: white;
+        }
+        .cm-s-dracula .CodeMirror-gutters {
+            background: rgba(0,0,0,0.5);
+            border-right: 1px solid rgba(255,255,255,0.1);
         }
 
         /* ==================== NASTAVENÍ ==================== */
@@ -610,6 +666,7 @@ HTML_TEMPLATE = """
             primary_color: {{ primary_color|tojson }},
             widget_bg_color: {{ widget_bg_color|tojson }},
             widget_opacity: {{ widget_opacity|tojson }},
+            blur_intensity: {{ blur_intensity|tojson }},
             theme: {{ theme|tojson }},
             font_size: {{ font_size|tojson }},
             avatar: {{ avatar|tojson }},
@@ -629,6 +686,7 @@ HTML_TEMPLATE = """
             <div class="taskbar-icon" onclick="openFileManager()"><i class="fa-regular fa-folder-open"></i></div>
             <div class="taskbar-icon" onclick="openTerminal()"><i class="fa-solid fa-terminal"></i></div>
             <div class="taskbar-icon" onclick="openCalculator()"><i class="fa-solid fa-calculator"></i></div>
+            <div class="taskbar-icon" onclick="openCodeEditor()"><i class="fa-solid fa-code"></i></div>
         </div>
         <div class="taskbar-right">
             <div class="taskbar-icon" onclick="openSettings()"><i class="fa-solid fa-gear"></i></div>
@@ -649,7 +707,7 @@ HTML_TEMPLATE = """
             <div class="start-app" onclick="openCalculator()"><i class="fa-solid fa-calculator"></i><span>Kalkulačka</span></div>
             <div class="start-app" onclick="openThisPC()"><i class="fa-solid fa-computer"></i><span>Tento PC</span></div>
             <div class="start-app" onclick="openBrowserWindow()"><i class="fa-solid fa-globe"></i><span>Prohlížeč</span></div>
-            <div class="start-app" onclick="openStore()"><i class="fa-solid fa-store"></i><span>Obchod</span></div>
+            <div class="start-app" onclick="openCodeEditor()"><i class="fa-solid fa-code"></i><span>Code Editor</span></div>
             <div class="start-app" onclick="openApp('calendar')"><i class="fa-regular fa-calendar"></i><span>Kalendář</span></div>
         </div>
     </div>
@@ -716,7 +774,7 @@ HTML_TEMPLATE = """
 
             // Události pro přesun (hlavička)
             header.addEventListener('mousedown', (e) => startDrag(e, winDiv));
-            // Události pro změnu velikosti (zachytáváme na celém okně, ale přes hlavičku se bude přesouvat)
+            // Události pro změnu velikosti
             winDiv.addEventListener('mousemove', onResizeHover);
             winDiv.addEventListener('mousedown', (e) => startResize(e, winDiv));
             winDiv.addEventListener('mouseup', stopResize);
@@ -828,7 +886,7 @@ HTML_TEMPLATE = """
             const desktop = document.getElementById('desktop');
             const minW = 300, minH = 200;
             const maxW = desktop.clientWidth - startLeft;
-            const maxH = desktop.clientHeight - startTop - 48; // odečteme taskbar
+            const maxH = desktop.clientHeight - startTop - 48;
 
             let newWidth = startWidth;
             let newHeight = startHeight;
@@ -877,7 +935,6 @@ HTML_TEMPLATE = """
             if (!win) return;
             win.classList.toggle('maximized');
             win.classList.remove('minimized');
-            // Vrátíme výchozí kurzor
             win.style.cursor = 'default';
         }
 
@@ -1080,6 +1137,50 @@ HTML_TEMPLATE = """
             if (app === 'calendar') createWindow('Kalendář', '<div style="padding:20px; text-align:center;">Kalendář (demo)</div>', 400, 300, 200, 150);
         }
 
+        // ==================== CODE EDITOR ====================
+        function openCodeEditor() {
+            const editorId = 'editor-' + Date.now();
+            const content = `
+                <div class="code-editor-container">
+                    <div class="editor-toolbar">
+                        <select class="editor-select" id="${editorId}-lang">
+                            <option value="python">Python</option>
+                            <option value="c">C</option>
+                            <option value="go">Go</option>
+                        </select>
+                        <span>Ukázkový kód (jen pro úpravy)</span>
+                    </div>
+                    <textarea id="${editorId}-code"># Zde piš svůj kód...\\n\\ndef hello():\\n    print("Hello, MeowOS!")</textarea>
+                </div>
+            `;
+            const winId = createWindow('Code Editor', content, 700, 500, 250, 150);
+            setTimeout(() => {
+                const textarea = document.getElementById(`${editorId}-code`);
+                const langSelect = document.getElementById(`${editorId}-lang`);
+                if (!textarea) return;
+
+                // Inicializace CodeMirror
+                const cm = CodeMirror.fromTextArea(textarea, {
+                    lineNumbers: true,
+                    mode: 'python',
+                    theme: 'dracula',
+                    indentUnit: 4,
+                    smartIndent: true,
+                    lineWrapping: true
+                });
+
+                langSelect.addEventListener('change', (e) => {
+                    const mode = e.target.value;
+                    if (mode === 'python') cm.setOption('mode', 'python');
+                    else if (mode === 'c') cm.setOption('mode', 'text/x-csrc');
+                    else if (mode === 'go') cm.setOption('mode', 'go');
+                });
+
+                // Přizpůsobení velikosti okna
+                cm.setSize('100%', '100%');
+            }, 100);
+        }
+
         // ========================= NASTAVENÍ =========================
         function openSettings() {
             fetch('/api/system-info')
@@ -1130,6 +1231,10 @@ HTML_TEMPLATE = """
                                 <div class="settings-row">
                                     <div class="settings-label">Průhlednost (${Math.round(meowConfig.widget_opacity*100)}%)</div>
                                     <input type="range" min="0.1" max="1" step="0.05" value="${meowConfig.widget_opacity}" class="slider" id="widget-opacity-slider">
+                                </div>
+                                <div class="settings-row">
+                                    <div class="settings-label">Intenzita rozostření (${meowConfig.blur_intensity} px)</div>
+                                    <input type="range" min="0" max="20" step="1" value="${meowConfig.blur_intensity}" class="slider" id="blur-intensity-slider">
                                 </div>
                                 <div class="settings-row">
                                     <div class="settings-label">Barevný režim</div>
@@ -1253,6 +1358,11 @@ HTML_TEMPLATE = """
                             opacitySlider.addEventListener('input', (e) => changeWidgetOpacity(e.target.value));
                         }
 
+                        const blurSlider = container.querySelector('#blur-intensity-slider');
+                        if (blurSlider) {
+                            blurSlider.addEventListener('input', (e) => changeBlurIntensity(e.target.value));
+                        }
+
                         const themeSelect = container.querySelector('#theme-select');
                         if (themeSelect) {
                             themeSelect.addEventListener('change', (e) => changeTheme(e.target.value));
@@ -1319,6 +1429,11 @@ HTML_TEMPLATE = """
         function changeWidgetOpacity(value) {
             document.body.style.setProperty('--widget-opacity', value);
             fetch('/api/set-widget-opacity', { method: 'POST', body: 'opacity=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
+        }
+
+        function changeBlurIntensity(value) {
+            document.body.style.setProperty('--blur-intensity', value + 'px');
+            fetch('/api/set-blur', { method: 'POST', body: 'blur=' + value, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
         }
 
         function changeTheme(value) {
@@ -1455,6 +1570,13 @@ def api_set_widget_bg():
 def api_set_widget_opacity():
     config = load_config()
     config['widget_opacity'] = float(request.form.get('opacity', 0.8))
+    save_config(config)
+    return 'OK'
+
+@app.route('/api/set-blur', methods=['POST'])
+def api_set_blur():
+    config = load_config()
+    config['blur_intensity'] = int(request.form.get('blur', 20))
     save_config(config)
     return 'OK'
 
