@@ -1,6 +1,6 @@
 #!/bin/bash
-# MeowOS – finální edice s opraveným ukládáním tapety a podporou Bash
-# Autor: Jakub (s asistencí AI)
+# MeowOS – final edition
+# Autor: meow with ai
 
 set -e
 
