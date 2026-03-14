@@ -1,5 +1,5 @@
 #!/bin/bash
-# MeowOS – finální edice s přehledem oken a volbou umístění taskbaru (OPRAVENO)
+# MeowOS – finální edice s profily nastavení a podporou Bash
 # Autor: Jakub (s asistencí AI)
 
 set -e
@@ -17,7 +17,7 @@ echo "🐧 Vytvářím hlavní soubor app.py (může to chvíli trvat)..."
 cat > app.py << 'EOF'
 #!/usr/bin/env python3
 """
-MeowOS – finální edice s přehledem oken a volbou umístění taskbaru (OPRAVENO)
+MeowOS – finální edice s profily nastavení a podporou Bash v Code Editoru
 """
 
 import os
@@ -50,7 +50,19 @@ DEFAULT_CONFIG = {
     'volume': 80,
     'default_window_width': 640,
     'default_window_height': 440,
-    'taskbar_position': 'bottom'  # 'top' nebo 'bottom'
+    'taskbar_position': 'bottom',  # 'top' nebo 'bottom'
+    'profiles': {                   # slovník pojmenovaných profilů
+        'Výchozí': {
+            'wallpaper': 'linear-gradient(145deg, #0f172a, #1e1b2b)',
+            'primary_color': '#c084fc',
+            'widget_bg_color': '#0a0a0f',
+            'widget_opacity': 0.8,
+            'blur_intensity': 20,
+            'theme': 'dark',
+            'font_size': '13px'
+        }
+    },
+    'active_profile': 'Výchozí'
 }
 
 def load_config():
@@ -58,9 +70,24 @@ def load_config():
         try:
             with open(CONFIG_FILE, 'r') as f:
                 config = json.load(f)
+                # doplnění chybějících klíčů
                 for k, v in DEFAULT_CONFIG.items():
                     if k not in config:
                         config[k] = v
+                # zajistit, že profil 'Výchozí' vždy existuje
+                if 'profiles' not in config:
+                    config['profiles'] = {}
+                if 'Výchozí' not in config['profiles']:
+                    config['profiles']['Výchozí'] = DEFAULT_CONFIG.copy()
+                    del config['profiles']['Výchozí']['profiles']
+                    del config['profiles']['Výchozí']['active_profile']
+                    del config['profiles']['Výchozí']['username']
+                    del config['profiles']['Výchozí']['avatar']
+                    del config['profiles']['Výchozí']['wifi_enabled']
+                    del config['profiles']['Výchozí']['volume']
+                    del config['profiles']['Výchozí']['default_window_width']
+                    del config['profiles']['Výchozí']['default_window_height']
+                    del config['profiles']['Výchozí']['taskbar_position']
                 return config
         except:
             return DEFAULT_CONFIG.copy()
@@ -131,7 +158,7 @@ def get_system_info():
     }
 
 # ============================================================================
-# Spouštění kódu
+# Spouštění kódu (včetně Bash)
 # ============================================================================
 def run_code(code, lang):
     """Spustí kód v daném jazyce a vrátí výstup."""
@@ -167,6 +194,15 @@ def run_code(code, lang):
                 return result.stdout + result.stderr
             except subprocess.TimeoutExpired:
                 return f"Chyba: běh trval déle než {timeout} sekund."
+        elif lang == 'bash':
+            file_path = os.path.join(tmpdir, 'script.sh')
+            with open(file_path, 'w') as f:
+                f.write(code)
+            try:
+                result = subprocess.run(['bash', file_path], capture_output=True, text=True, timeout=timeout)
+                return result.stdout + result.stderr
+            except subprocess.TimeoutExpired:
+                return f"Chyba: běh trval déle než {timeout} sekund."
         else:
             return "Nepodporovaný jazyk."
 
@@ -187,6 +223,7 @@ HTML_TEMPLATE = """
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/python/python.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/clike/clike.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/go/go.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/shell/shell.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -761,6 +798,39 @@ HTML_TEMPLATE = """
             border-radius: 6px;
             color: white;
         }
+        /* ==================== PROFILY ==================== */
+        .profiles-section {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+        .profile-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(255,255,255,0.05);
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        .profile-name {
+            font-weight: 500;
+        }
+        .profile-actions button {
+            background: none;
+            border: none;
+            color: var(--text-color);
+            margin-left: 8px;
+            cursor: pointer;
+            opacity: 0.7;
+        }
+        .profile-actions button:hover {
+            opacity: 1;
+            color: var(--primary);
+        }
+        .profile-active {
+            border-left: 3px solid var(--primary);
+        }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
@@ -780,7 +850,9 @@ HTML_TEMPLATE = """
             volume: {{ volume|tojson }},
             default_window_width: {{ default_window_width|tojson }},
             default_window_height: {{ default_window_height|tojson }},
-            taskbar_position: {{ taskbar_position|tojson }}
+            taskbar_position: {{ taskbar_position|tojson }},
+            profiles: {{ profiles|tojson }},
+            active_profile: {{ active_profile|tojson }}
         };
     </script>
 
@@ -858,7 +930,6 @@ HTML_TEMPLATE = """
             const defaultWidth = meowConfig.default_window_width || 640;
             const defaultHeight = meowConfig.default_window_height || 440;
 
-            // Pokud je lišta nahoře, posuneme výchozí y dolů, aby okno nezačínalo pod lištou
             if (meowConfig.taskbar_position === 'top' && y < 48) {
                 y = 48;
             }
@@ -1062,7 +1133,6 @@ HTML_TEMPLATE = """
         function toggleOverview() {
             const overview = document.getElementById('overview');
             if (!overviewVisible) {
-                // Sestavit miniatury oken
                 let html = '';
                 windows.forEach(w => {
                     if (!w.element.classList.contains('minimized')) {
@@ -1088,7 +1158,7 @@ HTML_TEMPLATE = """
             const win = document.getElementById(id);
             if (win) {
                 bringToFront(win);
-                toggleOverview(); // zavřít přehled
+                toggleOverview();
             }
         }
 
@@ -1296,10 +1366,11 @@ HTML_TEMPLATE = """
                             <option value="python">Python</option>
                             <option value="c">C</option>
                             <option value="go">Go</option>
+                            <option value="bash">Bash</option>
                         </select>
                         <button class="editor-run-btn" id="${editorId}-run"><i class="fa-solid fa-play"></i> Run</button>
                     </div>
-                    <textarea id="${editorId}-code">#include <stdio.h>\\n\\nint main() {\\n    printf("Hello, MeowOS!\\\\n");\\n    return 0;\\n}</textarea>
+                    <textarea id="${editorId}-code">#!/bin/bash\\necho "Hello from MeowOS!"</textarea>
                     <div class="editor-terminal" id="${editorId}-output">Výstup se zobrazí zde...</div>
                 </div>
             `;
@@ -1313,7 +1384,7 @@ HTML_TEMPLATE = """
 
                 const cm = CodeMirror.fromTextArea(textarea, {
                     lineNumbers: true,
-                    mode: 'c',
+                    mode: 'bash',
                     theme: 'dracula',
                     indentUnit: 4,
                     smartIndent: true,
@@ -1326,6 +1397,7 @@ HTML_TEMPLATE = """
                     if (mode === 'python') cm.setOption('mode', 'python');
                     else if (mode === 'c') cm.setOption('mode', 'text/x-csrc');
                     else if (mode === 'go') cm.setOption('mode', 'go');
+                    else if (mode === 'bash') cm.setOption('mode', 'shell');
                 });
 
                 runBtn.addEventListener('click', () => {
@@ -1356,6 +1428,19 @@ HTML_TEMPLATE = """
                 .then(r => r.json())
                 .then(info => {
                     const uptime = Math.floor(info.uptime / 3600) + 'h ' + Math.floor((info.uptime % 3600) / 60) + 'm';
+                    const profilesHtml = Object.keys(meowConfig.profiles).map(profileName => {
+                        const isActive = (profileName === meowConfig.active_profile);
+                        return `
+                            <div class="profile-item ${isActive ? 'profile-active' : ''}">
+                                <span class="profile-name">${profileName}</span>
+                                <div class="profile-actions">
+                                    <button onclick="loadProfile('${profileName}')" title="Načíst"><i class="fa-solid fa-rotate-right"></i></button>
+                                    ${profileName !== 'Výchozí' ? `<button onclick="deleteProfile('${profileName}')" title="Smazat"><i class="fa-solid fa-trash"></i></button>` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+
                     const content = `
                         <div class="settings-container" id="settings-container-${Date.now()}">
                             <div class="settings-tabs">
@@ -1420,6 +1505,18 @@ HTML_TEMPLATE = """
                                         <option value="13px" ${meowConfig.font_size=='13px'?'selected':''}>Střední</option>
                                         <option value="14px" ${meowConfig.font_size=='14px'?'selected':''}>Velká</option>
                                     </select>
+                                </div>
+
+                                <!-- Sekce pro profily -->
+                                <div class="profiles-section">
+                                    <div class="settings-label">Uložené profily</div>
+                                    <div id="profiles-list">
+                                        ${profilesHtml}
+                                    </div>
+                                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                                        <input type="text" id="new-profile-name" placeholder="Název nového profilu" class="settings-input" style="flex:1;">
+                                        <button class="settings-btn" id="save-profile-btn">Uložit aktuální jako profil</button>
+                                    </div>
                                 </div>
                             </div>
                             <div id="settings-okna" class="settings-panel">
@@ -1595,8 +1692,49 @@ HTML_TEMPLATE = """
                         const shutdownBtn = container.querySelector('#shutdown-btn');
                         if (shutdownBtn) shutdownBtn.addEventListener('click', () => powerAction('shutdown'));
 
+                        // Profily
+                        const saveProfileBtn = container.querySelector('#save-profile-btn');
+                        if (saveProfileBtn) {
+                            saveProfileBtn.addEventListener('click', () => {
+                                const profileName = container.querySelector('#new-profile-name')?.value;
+                                if (profileName) saveProfile(profileName);
+                            });
+                        }
                     }, 50);
                 });
+        }
+
+        // ========================= FUNKCE PRO PROFILY =========================
+        function loadProfile(name) {
+            fetch('/api/load-profile', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'name=' + encodeURIComponent(name)
+            }).then(() => {
+                location.reload();
+            });
+        }
+
+        function saveProfile(name) {
+            fetch('/api/save-profile', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'name=' + encodeURIComponent(name)
+            }).then(() => {
+                location.reload();
+            });
+        }
+
+        function deleteProfile(name) {
+            if (confirm(`Opravdu smazat profil "${name}"?`)) {
+                fetch('/api/delete-profile', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: 'name=' + encodeURIComponent(name)
+                }).then(() => {
+                    location.reload();
+                });
+            }
         }
 
         // ========================= FUNKCE PRO NASTAVENÍ =========================
@@ -1653,7 +1791,7 @@ HTML_TEMPLATE = """
         function changeTaskbarPosition(pos) {
             fetch('/api/set-taskbar-pos', { method: 'POST', body: 'pos=' + pos, headers: {'Content-Type': 'application/x-www-form-urlencoded'} })
             .then(() => {
-                location.reload(); // pro kompletní přenačtení stylů
+                location.reload();
             });
         }
 
@@ -1679,7 +1817,7 @@ HTML_TEMPLATE = """
 
         document.addEventListener('click', function(e) {
             const menu = document.getElementById('start-menu');
-            const startBtn = document.querySelector('.taskbar-icon:nth-child(2)'); // druhá ikona (linux)
+            const startBtn = document.querySelector('.taskbar-icon:nth-child(2)');
             if (startMenuVisible && !menu.contains(e.target) && !startBtn.contains(e.target)) {
                 menu.classList.remove('visible');
                 startMenuVisible = false;
@@ -1825,6 +1963,48 @@ def api_set_volume():
     config = load_config()
     config['volume'] = int(request.form.get('volume', 80))
     save_config(config)
+    return 'OK'
+
+@app.route('/api/save-profile', methods=['POST'])
+def api_save_profile():
+    config = load_config()
+    name = request.form.get('name', 'Nový profil')
+    # Uloží aktuální nastavení vzhledu do profilu
+    profile = {
+        'wallpaper': config['wallpaper'],
+        'primary_color': config['primary_color'],
+        'widget_bg_color': config['widget_bg_color'],
+        'widget_opacity': config['widget_opacity'],
+        'blur_intensity': config['blur_intensity'],
+        'theme': config['theme'],
+        'font_size': config['font_size']
+    }
+    config['profiles'][name] = profile
+    save_config(config)
+    return 'OK'
+
+@app.route('/api/load-profile', methods=['POST'])
+def api_load_profile():
+    config = load_config()
+    name = request.form.get('name', 'Výchozí')
+    if name in config['profiles']:
+        profile = config['profiles'][name]
+        config.update(profile)
+        config['active_profile'] = name
+        save_config(config)
+    return 'OK'
+
+@app.route('/api/delete-profile', methods=['POST'])
+def api_delete_profile():
+    config = load_config()
+    name = request.form.get('name', '')
+    if name in config['profiles'] and name != 'Výchozí':
+        del config['profiles'][name]
+        if config['active_profile'] == name:
+            # nastavit aktivní na Výchozí
+            config['active_profile'] = 'Výchozí'
+            config.update(config['profiles']['Výchozí'])
+        save_config(config)
     return 'OK'
 
 @app.route('/api/restart')
