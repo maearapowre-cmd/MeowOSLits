@@ -1,12 +1,12 @@
 #!/bin/bash
-# MeowOS – kompletní edice s Code Editorem a nastavením blur
+# MeowOS – kompletní edice s Code Editorem a integrovaným terminálem
 # Autor: Jakub (s asistencí AI)
 
 set -e
 
 echo "🔧 Aktualizuji systém a instaluji potřebné balíčky..."
 sudo apt update
-sudo apt install -y python3-flask python3-psutil wireless-tools
+sudo apt install -y python3-flask python3-psutil wireless-tools gcc golang-go
 
 echo "📁 Vytvářím složku pro aplikaci..."
 mkdir -p ~/meowos
@@ -17,7 +17,7 @@ echo "🐧 Vytvářím hlavní soubor app.py (může to chvíli trvat)..."
 cat > app.py << 'EOF'
 #!/usr/bin/env python3
 """
-MeowOS – finální edice s Code Editorem a nastavením blur
+MeowOS – finální edice s Code Editorem a integrovaným terminálem
 """
 
 import os
@@ -25,6 +25,8 @@ import psutil
 import subprocess
 import json
 import time
+import tempfile
+import threading
 from datetime import datetime
 from flask import Flask, render_template_string, jsonify, request
 
@@ -127,6 +129,48 @@ def get_system_info():
         'disks': get_disks(),
         'ips': get_ip_addresses()
     }
+
+# ============================================================================
+# Spouštění kódu
+# ============================================================================
+def run_code(code, lang):
+    """Spustí kód v daném jazyce a vrátí výstup."""
+    timeout = 5  # sekund
+    with tempfile.TemporaryDirectory() as tmpdir:
+        if lang == 'python':
+            file_path = os.path.join(tmpdir, 'script.py')
+            with open(file_path, 'w') as f:
+                f.write(code)
+            try:
+                result = subprocess.run(['python3', file_path], capture_output=True, text=True, timeout=timeout)
+                return result.stdout + result.stderr
+            except subprocess.TimeoutExpired:
+                return f"Chyba: běh trval déle než {timeout} sekund."
+        elif lang == 'c':
+            file_path = os.path.join(tmpdir, 'program.c')
+            with open(file_path, 'w') as f:
+                f.write(code)
+            # Kompilace
+            try:
+                compile_result = subprocess.run(['gcc', file_path, '-o', os.path.join(tmpdir, 'program')], capture_output=True, text=True, timeout=timeout)
+                if compile_result.returncode != 0:
+                    return compile_result.stderr
+                # Spuštění
+                run_result = subprocess.run([os.path.join(tmpdir, 'program')], capture_output=True, text=True, timeout=timeout)
+                return run_result.stdout + run_result.stderr
+            except subprocess.TimeoutExpired:
+                return f"Chyba: běh trval déle než {timeout} sekund."
+        elif lang == 'go':
+            file_path = os.path.join(tmpdir, 'program.go')
+            with open(file_path, 'w') as f:
+                f.write(code)
+            try:
+                result = subprocess.run(['go', 'run', file_path], capture_output=True, text=True, timeout=timeout)
+                return result.stdout + result.stderr
+            except subprocess.TimeoutExpired:
+                return f"Chyba: běh trval déle než {timeout} sekund."
+        else:
+            return "Nepodporovaný jazyk."
 
 # ============================================================================
 # HTML šablona
@@ -289,6 +333,8 @@ HTML_TEMPLATE = """
             flex: 1;
             padding: 16px;
             overflow-y: auto;
+            display: flex;
+            flex-direction: column;
         }
 
         /* ==================== TASKBAR ==================== */
@@ -435,42 +481,18 @@ HTML_TEMPLATE = """
             filter: drop-shadow(0 6px 8px rgba(0,0,0,0.5));
         }
 
-        /* ==================== TERMINÁL ==================== */
-        .terminal-container {
-            display: flex;
-            flex-direction: column;
-            height: 100%;
-            background: rgba(0,0,0,0.4);
-            border-radius: 8px;
-            font-family: 'Courier New', monospace;
-        }
-        .terminal-output {
-            flex: 1;
-            padding: 10px;
-            overflow-y: auto;
-            color: #a5d6ff;
-            white-space: pre-wrap;
-            font-size: 13px;
-        }
-        .terminal-input-line {
-            display: flex;
-            padding: 5px 10px;
+        /* ==================== TERMINÁL (pro editor) ==================== */
+        .editor-terminal {
             background: rgba(0,0,0,0.6);
-            border-top: 1px solid #2d2d3a;
-        }
-        .terminal-prompt {
-            color: #c084fc;
-            margin-right: 8px;
-            font-weight: bold;
-        }
-        .terminal-input {
-            flex: 1;
-            background: transparent;
-            border: none;
-            color: #a5d6ff;
+            border-radius: 8px;
+            padding: 10px;
             font-family: 'Courier New', monospace;
-            font-size: 13px;
-            outline: none;
+            font-size: 12px;
+            color: #a5d6ff;
+            height: 120px;
+            overflow-y: auto;
+            margin-top: 10px;
+            white-space: pre-wrap;
         }
 
         /* ==================== KALKULAČKA ==================== */
@@ -525,6 +547,9 @@ HTML_TEMPLATE = """
             display: flex;
             gap: 10px;
             align-items: center;
+            background: rgba(0,0,0,0.2);
+            padding: 5px 10px;
+            border-radius: 8px;
         }
         .editor-select {
             background: rgba(0,0,0,0.4);
@@ -533,8 +558,23 @@ HTML_TEMPLATE = """
             border-radius: 6px;
             padding: 4px 8px;
         }
+        .editor-run-btn {
+            background: var(--primary);
+            border: none;
+            color: #0a0a0f;
+            padding: 4px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .editor-run-btn:hover {
+            filter: brightness(1.1);
+        }
         .CodeMirror {
-            height: 100%;
+            flex: 1;
             border-radius: 8px;
             background: rgba(0,0,0,0.3);
             color: white;
@@ -1148,25 +1188,29 @@ HTML_TEMPLATE = """
                             <option value="c">C</option>
                             <option value="go">Go</option>
                         </select>
-                        <span>Ukázkový kód (jen pro úpravy)</span>
+                        <button class="editor-run-btn" id="${editorId}-run"><i class="fa-solid fa-play"></i> Run</button>
                     </div>
-                    <textarea id="${editorId}-code"># Zde piš svůj kód...\\n\\ndef hello():\\n    print("Hello, MeowOS!")</textarea>
+                    <textarea id="${editorId}-code">#include <stdio.h>\\n\\nint main() {\\n    printf("Hello, MeowOS!\\\\n");\\n    return 0;\\n}</textarea>
+                    <div class="editor-terminal" id="${editorId}-output">Výstup se zobrazí zde...</div>
                 </div>
             `;
-            const winId = createWindow('Code Editor', content, 700, 500, 250, 150);
+            const winId = createWindow('Code Editor', content, 750, 550, 250, 150);
             setTimeout(() => {
                 const textarea = document.getElementById(`${editorId}-code`);
                 const langSelect = document.getElementById(`${editorId}-lang`);
+                const runBtn = document.getElementById(`${editorId}-run`);
+                const outputDiv = document.getElementById(`${editorId}-output`);
                 if (!textarea) return;
 
                 // Inicializace CodeMirror
                 const cm = CodeMirror.fromTextArea(textarea, {
                     lineNumbers: true,
-                    mode: 'python',
+                    mode: 'c',
                     theme: 'dracula',
                     indentUnit: 4,
                     smartIndent: true,
-                    lineWrapping: true
+                    lineWrapping: true,
+                    value: textarea.value
                 });
 
                 langSelect.addEventListener('change', (e) => {
@@ -1176,8 +1220,26 @@ HTML_TEMPLATE = """
                     else if (mode === 'go') cm.setOption('mode', 'go');
                 });
 
-                // Přizpůsobení velikosti okna
-                cm.setSize('100%', '100%');
+                runBtn.addEventListener('click', () => {
+                    const code = cm.getValue();
+                    const lang = langSelect.value;
+                    outputDiv.innerHTML = 'Spouštím...';
+                    fetch('/api/run', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ code: code, lang: lang })
+                    })
+                    .then(r => r.text())
+                    .then(output => {
+                        outputDiv.innerHTML = output.replace(/\\n/g, '<br>');
+                    })
+                    .catch(err => {
+                        outputDiv.innerHTML = 'Chyba: ' + err;
+                    });
+                });
+
+                // Přizpůsobení velikosti
+                cm.setSize('100%', 'calc(100% - 140px)'); // výška editoru = okno - toolbar - terminal
             }, 100);
         }
 
@@ -1529,6 +1591,14 @@ def api_cmd():
         output = result.stdout + result.stderr
     except Exception as e:
         output = str(e)
+    return output
+
+@app.route('/api/run', methods=['POST'])
+def api_run():
+    data = request.get_json()
+    code = data.get('code', '')
+    lang = data.get('lang', 'python')
+    output = run_code(code, lang)
     return output
 
 @app.route('/api/set-username', methods=['POST'])
