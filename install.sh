@@ -1,5 +1,5 @@
 #!/bin/bash
-# MeowOS – kompletní edice s Code Editorem a integrovaným terminálem
+# MeowOS – finální edice s přehledem oken a volbou umístění taskbaru
 # Autor: Jakub (s asistencí AI)
 
 set -e
@@ -17,7 +17,7 @@ echo "🐧 Vytvářím hlavní soubor app.py (může to chvíli trvat)..."
 cat > app.py << 'EOF'
 #!/usr/bin/env python3
 """
-MeowOS – finální edice s Code Editorem a integrovaným terminálem
+MeowOS – finální edice s přehledem oken a volbou umístění taskbaru
 """
 
 import os
@@ -26,7 +26,6 @@ import subprocess
 import json
 import time
 import tempfile
-import threading
 from datetime import datetime
 from flask import Flask, render_template_string, jsonify, request
 
@@ -50,7 +49,8 @@ DEFAULT_CONFIG = {
     'wifi_enabled': True,
     'volume': 80,
     'default_window_width': 640,
-    'default_window_height': 440
+    'default_window_height': 440,
+    'taskbar_position': 'bottom'  # 'top' nebo 'bottom'
 }
 
 def load_config():
@@ -150,12 +150,10 @@ def run_code(code, lang):
             file_path = os.path.join(tmpdir, 'program.c')
             with open(file_path, 'w') as f:
                 f.write(code)
-            # Kompilace
             try:
                 compile_result = subprocess.run(['gcc', file_path, '-o', os.path.join(tmpdir, 'program')], capture_output=True, text=True, timeout=timeout)
                 if compile_result.returncode != 0:
                     return compile_result.stderr
-                # Spuštění
                 run_result = subprocess.run([os.path.join(tmpdir, 'program')], capture_output=True, text=True, timeout=timeout)
                 return run_result.stdout + run_result.stderr
             except subprocess.TimeoutExpired:
@@ -210,6 +208,7 @@ HTML_TEMPLATE = """
             --default-win-height: {{ default_window_height }}px;
             --border-radius: 12px;
             --border-size: 1px;
+            --taskbar-pos: {{ taskbar_position }};
         }
 
         body {
@@ -244,7 +243,8 @@ HTML_TEMPLATE = """
         #desktop {
             width: 100%;
             height: 100%;
-            padding-bottom: 48px;
+            padding-bottom: {% if taskbar_position == 'bottom' %}48px{% else %}0{% endif %};
+            padding-top: {% if taskbar_position == 'top' %}48px{% else %}0{% endif %};
             position: relative;
             overflow: hidden;
         }
@@ -274,7 +274,7 @@ HTML_TEMPLATE = """
         .window.maximized {
             width: 100% !important;
             height: calc(100% - 48px) !important;
-            top: 0 !important;
+            top: {% if taskbar_position == 'top' %}48px{% else %}0{% endif %} !important;
             left: 0 !important;
             border-radius: 0;
             resize: none;
@@ -340,14 +340,20 @@ HTML_TEMPLATE = """
         /* ==================== TASKBAR ==================== */
         #taskbar {
             position: fixed;
+            {% if taskbar_position == 'bottom' %}
             bottom: 0;
+            top: auto;
+            {% else %}
+            top: 0;
+            bottom: auto;
+            {% endif %}
             left: 0;
             width: 100%;
             height: 48px;
             background: color-mix(in srgb, var(--widget-bg) calc(var(--widget-opacity) * 100%), transparent);
             backdrop-filter: blur(var(--blur-intensity));
             -webkit-backdrop-filter: blur(var(--blur-intensity));
-            border-top: var(--border-size) solid rgba(255,255,255,0.1);
+            border-{% if taskbar_position == 'bottom' %}top{% else %}bottom{% endif %}: var(--border-size) solid rgba(255,255,255,0.1);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -395,7 +401,11 @@ HTML_TEMPLATE = """
         /* ==================== START MENU ==================== */
         #start-menu {
             position: fixed;
+            {% if taskbar_position == 'bottom' %}
             bottom: 60px;
+            {% else %}
+            top: 60px;
+            {% endif %}
             left: 50%;
             transform: translateX(-50%);
             width: 540px;
@@ -449,6 +459,62 @@ HTML_TEMPLATE = """
         .start-app span {
             font-size: 11px;
             text-align: center;
+        }
+
+        /* ==================== PŘEHLED OKEN (OVERVIEW) ==================== */
+        #overview {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(15px);
+            z-index: 2000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+            padding: 40px;
+        }
+        #overview.visible {
+            display: flex;
+        }
+        .overview-window {
+            width: 200px;
+            height: 150px;
+            background: color-mix(in srgb, var(--widget-bg) 70%, transparent);
+            border-radius: 10px;
+            border: 2px solid transparent;
+            overflow: hidden;
+            cursor: pointer;
+            transition: 0.2s;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+        }
+        .overview-window:hover {
+            border-color: var(--primary);
+            transform: scale(1.05);
+        }
+        .overview-header {
+            background: color-mix(in srgb, var(--widget-bg) 90%, black);
+            padding: 5px 8px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .overview-content {
+            flex: 1;
+            background: rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: var(--primary);
         }
 
         /* ==================== IKONY ==================== */
@@ -713,7 +779,8 @@ HTML_TEMPLATE = """
             wifi_enabled: {{ wifi_enabled|tojson }},
             volume: {{ volume|tojson }},
             default_window_width: {{ default_window_width|tojson }},
-            default_window_height: {{ default_window_height|tojson }}
+            default_window_height: {{ default_window_height|tojson }},
+            taskbar_position: {{ taskbar_position|tojson }}
         };
     </script>
 
@@ -721,6 +788,7 @@ HTML_TEMPLATE = """
 
     <div id="taskbar">
         <div class="taskbar-center">
+            <div class="taskbar-icon" onclick="toggleOverview()"><i class="fa-solid fa-grid-2"></i></div>
             <div class="taskbar-icon" onclick="toggleStartMenu()"><i class="fa-brands fa-linux"></i></div>
             <div class="taskbar-icon" onclick="openBrowserWindow()"><i class="fa-solid fa-globe"></i></div>
             <div class="taskbar-icon" onclick="openFileManager()"><i class="fa-regular fa-folder-open"></i></div>
@@ -734,6 +802,10 @@ HTML_TEMPLATE = """
             <div><i class="fa-solid fa-battery-full"></i> <span>100%</span></div>
             <div class="taskbar-time" id="taskbar-time"></div>
         </div>
+    </div>
+
+    <div id="overview" onclick="toggleOverview()">
+        <!-- Zde se dynamicky vloží miniatury oken -->
     </div>
 
     <div id="start-menu">
@@ -758,8 +830,9 @@ HTML_TEMPLATE = """
         let zIndexCounter = 100;
         let draggedWindow = null;
         let dragOffsetX, dragOffsetY;
-        let resizeData = null; // { win, edge, startX, startY, startWidth, startHeight, startLeft, startTop }
+        let resizeData = null;
         let startMenuVisible = false;
+        let overviewVisible = false;
         let terminalHistory = [];
         let historyIndex = -1;
 
@@ -788,6 +861,7 @@ HTML_TEMPLATE = """
             const winDiv = document.createElement('div');
             winDiv.className = 'window';
             winDiv.id = id;
+            winDiv.dataset.title = title;
             winDiv.style.width = (width || defaultWidth) + 'px';
             winDiv.style.height = (height || defaultHeight) + 'px';
             winDiv.style.left = x + 'px';
@@ -812,19 +886,16 @@ HTML_TEMPLATE = """
             winDiv.appendChild(content);
             desktop.appendChild(winDiv);
 
-            // Události pro přesun (hlavička)
             header.addEventListener('mousedown', (e) => startDrag(e, winDiv));
-            // Události pro změnu velikosti
             winDiv.addEventListener('mousemove', onResizeHover);
             winDiv.addEventListener('mousedown', (e) => startResize(e, winDiv));
             winDiv.addEventListener('mouseup', stopResize);
             winDiv.addEventListener('mouseleave', stopResize);
 
-            windows.push({ id, element: winDiv });
+            windows.push({ id, element: winDiv, title });
             return id;
         }
 
-        // ======== PŘESUN ========
         function startDrag(e, win) {
             if (e.target.closest('.window-btn') || resizeData) return;
             draggedWindow = win;
@@ -855,15 +926,12 @@ HTML_TEMPLATE = """
             document.removeEventListener('mouseup', stopDrag);
         }
 
-        // ======== ZMĚNA VELIKOSTI ========
         function onResizeHover(e) {
             const win = e.currentTarget;
             if (resizeData || win.classList.contains('maximized')) return;
             const rect = win.getBoundingClientRect();
             const edge = getResizeEdge(e.clientX, e.clientY, rect);
-            const style = getComputedStyle(win);
-            const isResizable = style.resize !== 'none' && !win.classList.contains('maximized');
-            if (!isResizable) return;
+            if (!edge) return;
 
             switch (edge) {
                 case 'n': win.style.cursor = 'n-resize'; break;
@@ -981,6 +1049,40 @@ HTML_TEMPLATE = """
         function closeWindow(id) {
             document.getElementById(id)?.remove();
             windows = windows.filter(w => w.id !== id);
+        }
+
+        // ========================= PŘEHLED OKEN =========================
+        function toggleOverview() {
+            const overview = document.getElementById('overview');
+            if (!overviewVisible) {
+                // Sestavit miniatury oken
+                let html = '';
+                windows.forEach(w => {
+                    if (!w.element.classList.contains('minimized')) {
+                        html += `
+                            <div class="overview-window" onclick="activateWindow('${w.id}'); event.stopPropagation();">
+                                <div class="overview-header"><i class="fa-brands fa-linux"></i> ${w.title}</div>
+                                <div class="overview-content"><i class="fa-regular fa-window-maximize"></i></div>
+                            </div>
+                        `;
+                    }
+                });
+                if (html === '') html = '<div style="color:white;">Žádná otevřená okna</div>';
+                overview.innerHTML = html;
+                overview.classList.add('visible');
+                overviewVisible = true;
+            } else {
+                overview.classList.remove('visible');
+                overviewVisible = false;
+            }
+        }
+
+        function activateWindow(id) {
+            const win = document.getElementById(id);
+            if (win) {
+                bringToFront(win);
+                toggleOverview(); // zavřít přehled
+            }
         }
 
         // ========================= APLIKACE =========================
@@ -1202,7 +1304,6 @@ HTML_TEMPLATE = """
                 const outputDiv = document.getElementById(`${editorId}-output`);
                 if (!textarea) return;
 
-                // Inicializace CodeMirror
                 const cm = CodeMirror.fromTextArea(textarea, {
                     lineNumbers: true,
                     mode: 'c',
@@ -1238,8 +1339,7 @@ HTML_TEMPLATE = """
                     });
                 });
 
-                // Přizpůsobení velikosti
-                cm.setSize('100%', 'calc(100% - 140px)'); // výška editoru = okno - toolbar - terminal
+                cm.setSize('100%', 'calc(100% - 140px)');
             }, 100);
         }
 
@@ -1256,6 +1356,7 @@ HTML_TEMPLATE = """
                                 <div class="settings-tab" data-tab="okna">Okna</div>
                                 <div class="settings-tab" data-tab="system">Systém</div>
                                 <div class="settings-tab" data-tab="uzivatele">Uživatelé</div>
+                                <div class="settings-tab" data-tab="lista">Lišta</div>
                                 <div class="settings-tab" data-tab="sit">Síť</div>
                                 <div class="settings-tab" data-tab="zvuk">Zvuk</div>
                                 <div class="settings-tab" data-tab="napajeni">Napájení</div>
@@ -1348,6 +1449,16 @@ HTML_TEMPLATE = """
                                     </select>
                                 </div>
                                 <button class="settings-btn" id="save-user-settings">Uložit</button>
+                            </div>
+                            <div id="settings-lista" class="settings-panel">
+                                <div class="settings-row">
+                                    <div class="settings-label">Umístění lišty</div>
+                                    <select class="settings-select" id="taskbar-position">
+                                        <option value="bottom" ${meowConfig.taskbar_position=='bottom'?'selected':''}>Dole</option>
+                                        <option value="top" ${meowConfig.taskbar_position=='top'?'selected':''}>Nahoře</option>
+                                    </select>
+                                    <button class="settings-btn" id="save-taskbar-position" style="margin-top:10px;">Uložit</button>
+                                </div>
                             </div>
                             <div id="settings-sit" class="settings-panel">
                                 <div class="settings-row">
@@ -1453,6 +1564,15 @@ HTML_TEMPLATE = """
                             });
                         }
 
+                        const taskbarPosSelect = container.querySelector('#taskbar-position');
+                        const saveTaskbarBtn = container.querySelector('#save-taskbar-position');
+                        if (saveTaskbarBtn && taskbarPosSelect) {
+                            saveTaskbarBtn.addEventListener('click', () => {
+                                const pos = taskbarPosSelect.value;
+                                changeTaskbarPosition(pos);
+                            });
+                        }
+
                         const wifiCheck = container.querySelector('#wifi-checkbox');
                         if (wifiCheck) {
                             wifiCheck.addEventListener('change', (e) => toggleWifi(e.target.checked));
@@ -1523,6 +1643,13 @@ HTML_TEMPLATE = """
             fetch('/api/set-window-size', { method: 'POST', body: `width=${width}&height=${height}`, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
         }
 
+        function changeTaskbarPosition(pos) {
+            fetch('/api/set-taskbar-pos', { method: 'POST', body: 'pos=' + pos, headers: {'Content-Type': 'application/x-www-form-urlencoded'} })
+            .then(() => {
+                location.reload(); // pro kompletní přenačtení stylů
+            });
+        }
+
         function toggleWifi(enabled) {
             fetch('/api/set-wifi', { method: 'POST', body: 'enabled=' + enabled, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
         }
@@ -1545,7 +1672,7 @@ HTML_TEMPLATE = """
 
         document.addEventListener('click', function(e) {
             const menu = document.getElementById('start-menu');
-            const startBtn = document.querySelector('.taskbar-icon:first-child');
+            const startBtn = document.querySelector('.taskbar-icon:nth-child(2)'); // druhá ikona (linux)
             if (startMenuVisible && !menu.contains(e.target) && !startBtn.contains(e.target)) {
                 menu.classList.remove('visible');
                 startMenuVisible = false;
@@ -1669,6 +1796,13 @@ def api_set_window_size():
     config = load_config()
     config['default_window_width'] = int(request.form.get('width', 640))
     config['default_window_height'] = int(request.form.get('height', 440))
+    save_config(config)
+    return 'OK'
+
+@app.route('/api/set-taskbar-pos', methods=['POST'])
+def api_set_taskbar_pos():
+    config = load_config()
+    config['taskbar_position'] = request.form.get('pos', 'bottom')
     save_config(config)
     return 'OK'
 
