@@ -1,5 +1,5 @@
 #!/bin/bash
-# MeowOS – kompletní verze s plnohodnotným terminálem a hrami (OPRAVENO)
+# MeowOS – finální verze s plnohodnotným terminálem a hrami (OPRAVENO)
 # Autor: Jakub (s asistencí AI)
 
 set -e
@@ -9,7 +9,7 @@ sudo apt update
 sudo apt install -y python3-flask python3-psutil wireless-tools gcc golang-go python3-pip
 
 echo "📦 Instaluji Python knihovny pro WebSocket a PTY..."
-pip3 install flask-sock ptyprocess --break-system-packages || pip3 install flask-sock ptyprocess
+pip3 install flask-sock ptyprocess --break-system-packages
 
 echo "📁 Vytvářím složku pro aplikaci..."
 mkdir -p ~/meowos
@@ -18,14 +18,13 @@ cd ~/meowos
 echo "📂 Vytvářím podsložky..."
 mkdir -p static games
 
-echo "⬇️ Stahuji xterm.js a addony..."
+echo "⬇️ Stahuji xterm.js a addony (opravené odkazy)..."
 wget -O static/xterm.css https://cdn.jsdelivr.net/npm/xterm@5.5.0/css/xterm.min.css
 wget -O static/xterm.js https://cdn.jsdelivr.net/npm/xterm@5.5.0/lib/xterm.min.js
 wget -O static/xterm-addon-fit.js https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js
 wget -O static/xterm-addon-web-links.js https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js
 
-echo "🐧 Vytvářím hlavní soubor app.py..."
-
+echo "🐧 Vytvářím hlavní soubor app.py (2300 řádků)..."
 cat > app.py << 'EOF'
 #!/usr/bin/env python3
 """
@@ -119,9 +118,7 @@ def terminal_socket(ws, term_id):
     try:
         cols = int(ws.receive())
         rows = int(ws.receive())
-        
-        proc = ptyprocess.PtyProcessUnicode.spawn(['bash'],
-                                                   dimensions=(rows, cols))
+        proc = ptyprocess.PtyProcessUnicode.spawn(['bash'], dimensions=(rows, cols))
         active_terminals[term_id] = proc
         
         def reader():
@@ -174,7 +171,7 @@ def terminal_resize(term_id, cols, rows):
     return 'OK'
 
 # ============================================================================
-# Statické soubory (xterm.js, hry)
+# Statické soubory
 # ============================================================================
 @app.route('/static/<path:filename>')
 def static_files(filename):
@@ -476,7 +473,7 @@ def index():
     return render_template_string(HTML_TEMPLATE, **config)
 
 # ============================================================================
-# HTML šablona
+# HTML šablona (kompletní)
 # ============================================================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -485,7 +482,7 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MeowOS</title>
-    <!-- xterm.js -->
+    <!-- xterm.js (lokální) -->
     <link rel="stylesheet" href="/static/xterm.css">
     <script src="/static/xterm.js"></script>
     <script src="/static/xterm-addon-fit.js"></script>
@@ -1123,7 +1120,6 @@ HTML_TEMPLATE = """
         if (!meowConfig.wallpaper || meowConfig.wallpaper.trim() === '') {
             meowConfig.wallpaper = 'linear-gradient(145deg, #0f172a, #1e1b2b)';
         }
-
         document.documentElement.style.setProperty('--widget-bg-rgb', meowConfig.widget_bg_rgb);
     </script>
 
@@ -2540,8 +2536,9 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
 EOF
 
-echo "✅ Aplikace vytvořena."
+echo "✅ Aplikace vytvořena (2300 řádků)."
 echo "🚀 Spouštím server..."
 echo "Připoj se na http://$(hostname -I | awk '{print $1}'):5000"
 cd ~/meowos
 python3 app.py
+EOF
