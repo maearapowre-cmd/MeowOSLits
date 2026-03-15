@@ -1,5 +1,5 @@
 #!/bin/bash
-# MeowOS – finální verze s Telegram botem (telebot, synchronní)
+# MeowOS – finální kompletní verze (2400+ řádků) s Code Editorem přes Telegram skupinu
 # Autor: Jakub (s asistencí AI)
 
 set -e
@@ -8,23 +8,24 @@ echo "🔧 Aktualizuji systém a instaluji potřebné balíčky..."
 sudo apt update
 sudo apt install -y python3-flask python3-psutil wireless-tools gcc golang-go python3-pip
 
-echo "📦 Instaluji Python knihovny – telebot (pyTelegramBotAPI)..."
-pip3 install pyTelegramBotAPI --break-system-packages
+echo "📦 Instaluji Python knihovny – telebot, requests..."
+pip3 install pyTelegramBotAPI requests --break-system-packages
 
 echo "📁 Vytvářím složku pro aplikaci..."
 mkdir -p ~/meowos
 cd ~/meowos
 
-# Pevný token (uživatelův)
-TELEGRAM_TOKEN="8514852844:AAFP5pYdkbOFIieo3oGEvhM3sDGJX7yVKKY"
-echo "$TELEGRAM_TOKEN" > telegram_token.txt
-chmod 600 telegram_token.txt
+# Uložíme tokeny
+echo "8514852844:AAFP5pYdkbOFIieo3oGEvhM3sDGJX7yVKKY" > token_A.txt
+echo "8500321366:AAGAMwA3aV9Ot47u4HVF_6RDdW6jeWujNjM" > token_B.txt
+chmod 600 token_*.txt
 
-echo "🐧 Vytvářím hlavní soubor app.py..."
+echo "🐧 Vytvářím hlavní soubor app.py (kompletní, 2000+ řádků)..."
 cat > app.py << 'EOF'
 #!/usr/bin/env python3
 """
-MeowOS – webové rozhraní s QR kódem pro Telegram bota (telebot)
+MeowOS – kompletní webové rozhraní s Code Editorem přes Telegram skupinu
+Obsahuje: okna, hry, nastavení, profily, Telegram terminál, Code Editor s podporou Python/C/Go/Bash přes Telegram.
 """
 
 import os
@@ -33,9 +34,10 @@ import subprocess
 import json
 import time
 import tempfile
-import threading
+import uuid
+import requests
 from datetime import datetime
-from flask import Flask, render_template_string, jsonify, request
+from flask import Flask, render_template_string, jsonify, request, abort
 
 app = Flask(__name__)
 
@@ -160,52 +162,45 @@ def get_system_info():
     }
 
 # ============================================================================
-# Spouštění kódu (pro Code Editor)
+# Telegram API (odesílání zpráv pomocí Bota A)
 # ============================================================================
-def run_code(code, lang):
-    timeout = 5
-    with tempfile.TemporaryDirectory() as tmpdir:
-        if lang == 'python':
-            file_path = os.path.join(tmpdir, 'script.py')
-            with open(file_path, 'w') as f:
-                f.write(code)
-            try:
-                result = subprocess.run(['python3', file_path], capture_output=True, text=True, timeout=timeout)
-                return result.stdout + result.stderr
-            except subprocess.TimeoutExpired:
-                return f"Chyba: běh trval déle než {timeout} sekund."
-        elif lang == 'c':
-            file_path = os.path.join(tmpdir, 'program.c')
-            with open(file_path, 'w') as f:
-                f.write(code)
-            try:
-                compile_result = subprocess.run(['gcc', file_path, '-o', os.path.join(tmpdir, 'program')], capture_output=True, text=True, timeout=timeout)
-                if compile_result.returncode != 0:
-                    return compile_result.stderr
-                run_result = subprocess.run([os.path.join(tmpdir, 'program')], capture_output=True, text=True, timeout=timeout)
-                return run_result.stdout + run_result.stderr
-            except subprocess.TimeoutExpired:
-                return f"Chyba: běh trval déle než {timeout} sekund."
-        elif lang == 'go':
-            file_path = os.path.join(tmpdir, 'program.go')
-            with open(file_path, 'w') as f:
-                f.write(code)
-            try:
-                result = subprocess.run(['go', 'run', file_path], capture_output=True, text=True, timeout=timeout)
-                return result.stdout + result.stderr
-            except subprocess.TimeoutExpired:
-                return f"Chyba: běh trval déle než {timeout} sekund."
-        elif lang == 'bash':
-            file_path = os.path.join(tmpdir, 'script.sh')
-            with open(file_path, 'w') as f:
-                f.write(code)
-            try:
-                result = subprocess.run(['bash', file_path], capture_output=True, text=True, timeout=timeout)
-                return result.stdout + result.stderr
-            except subprocess.TimeoutExpired:
-                return f"Chyba: běh trval déle než {timeout} sekund."
+TELEGRAM_BOT_A_TOKEN = None
+TELEGRAM_CHAT_ID = None
+
+def load_telegram_config():
+    global TELEGRAM_BOT_A_TOKEN, TELEGRAM_CHAT_ID
+    try:
+        with open(os.path.expanduser('~/meowos/token_A.txt'), 'r') as f:
+            TELEGRAM_BOT_A_TOKEN = f.read().strip()
+        chat_file = os.path.expanduser('~/meowos/group_chat_id.txt')
+        if os.path.exists(chat_file):
+            with open(chat_file, 'r') as f:
+                TELEGRAM_CHAT_ID = int(f.read().strip())
         else:
-            return "Nepodporovaný jazyk."
+            TELEGRAM_CHAT_ID = None
+    except:
+        TELEGRAM_BOT_A_TOKEN = None
+        TELEGRAM_CHAT_ID = None
+
+def send_telegram_message(text):
+    if not TELEGRAM_BOT_A_TOKEN or not TELEGRAM_CHAT_ID:
+        return False
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_A_TOKEN}/sendMessage"
+    payload = {
+        'chat_id': TELEGRAM_CHAT_ID,
+        'text': text,
+        'parse_mode': 'Markdown'
+    }
+    try:
+        r = requests.post(url, data=payload, timeout=5)
+        return r.ok
+    except:
+        return False
+
+# ============================================================================
+# Správa požadavků (pollování výstupu)
+# ============================================================================
+pending_outputs = {}  # {request_id: output}
 
 # ============================================================================
 # API routy
@@ -232,14 +227,43 @@ def api_cmd():
         output = str(e)
     return output
 
-@app.route('/api/run', methods=['POST'])
-def api_run():
+@app.route('/api/run-telegram', methods=['POST'])
+def api_run_telegram():
+    """Přijme kód a jazyk, odešle do Telegram skupiny a vrátí request_id."""
     data = request.get_json()
     code = data.get('code', '')
-    lang = data.get('lang', 'python')
-    output = run_code(code, lang)
-    return output
+    lang = data.get('lang', 'bash')
+    if not code.strip():
+        return jsonify({'error': 'Prázdný kód'}), 400
 
+    load_telegram_config()
+    if not TELEGRAM_BOT_A_TOKEN or not TELEGRAM_CHAT_ID:
+        return jsonify({'error': 'Telegram není nakonfigurován (chybí token nebo chat_id)'}), 500
+
+    req_id = str(uuid.uuid4())
+    pending_outputs[req_id] = None
+
+    message = f"CODE:{lang}:{req_id}\n{code}"
+    if send_telegram_message(message):
+        return jsonify({'request_id': req_id})
+    else:
+        del pending_outputs[req_id]
+        return jsonify({'error': 'Nepodařilo se odeslat zprávu do Telegramu'}), 500
+
+@app.route('/api/poll-output/<req_id>', methods=['GET'])
+def poll_output(req_id):
+    if req_id not in pending_outputs:
+        abort(404)
+    output = pending_outputs[req_id]
+    if output is None:
+        return jsonify({'status': 'pending'})
+    else:
+        del pending_outputs[req_id]
+        return jsonify({'status': 'done', 'output': output})
+
+# ============================================================================
+# API pro nastavení (stejné jako dříve)
+# ============================================================================
 @app.route('/api/set-username', methods=['POST'])
 def api_set_username():
     config = load_config()
@@ -388,11 +412,10 @@ def api_shutdown():
 @app.route('/')
 def index():
     config = load_config()
-    bot_username = "MeowOSBot"  # Uživatel si musí zjistit sám
-    return render_template_string(HTML_TEMPLATE, **config, bot_username=bot_username)
+    return render_template_string(HTML_TEMPLATE, **config)
 
 # ============================================================================
-# HTML šablona (bez xterm.js, s QR kódem)
+# HTML šablona (kompletní, 2000+ řádků)
 # ============================================================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -850,6 +873,18 @@ HTML_TEMPLATE = """
         .cm-s-dracula .CodeMirror-gutters {
             background: rgba(0,0,0,0.5);
             border-right: 1px solid rgba(255,255,255,0.1);
+        }
+        .editor-output {
+            background: rgba(0,0,0,0.6);
+            border-radius: 8px;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #a5d6ff;
+            height: 150px;
+            overflow-y: auto;
+            margin-top: 10px;
+            white-space: pre-wrap;
         }
 
         /* QR kód a informace o botovi */
@@ -1371,6 +1406,7 @@ HTML_TEMPLATE = """
             }
         }
 
+        // ==================== APLIKACE ====================
         function openFileManager() {
             createWindow('Správce souborů', `
                 <div style="display: flex; gap: 15px;">
@@ -1421,7 +1457,7 @@ HTML_TEMPLATE = """
         }
 
         function openTelegramTerminal() {
-            const botUsername = "{{ bot_username }}";
+            const botUsername = "mrmeowmeowbot";
             const qrData = `https://t.me/${botUsername}`;
             const content = `
                 <div class="telegram-info">
@@ -1502,6 +1538,7 @@ HTML_TEMPLATE = """
             if (app === 'calendar') createWindow('Kalendář', '<div style="padding:20px; text-align:center;">Kalendář (demo)</div>', 400, 300, 200, 150);
         }
 
+        // ==================== CODE EDITOR (přes Telegram) ====================
         function openCodeEditor() {
             const editorId = 'editor-' + Date.now();
             const content = `
@@ -1513,10 +1550,10 @@ HTML_TEMPLATE = """
                             <option value="go">Go</option>
                             <option value="bash">Bash</option>
                         </select>
-                        <button class="editor-run-btn" id="${editorId}-run"><i class="fa-solid fa-play"></i> Run</button>
+                        <button class="editor-run-btn" id="${editorId}-run"><i class="fa-solid fa-play"></i> Run přes Telegram</button>
                     </div>
                     <textarea id="${editorId}-code">#!/bin/bash\\necho "Hello from MeowOS!"</textarea>
-                    <div style="height: 150px; margin-top: 10px; background: rgba(0,0,0,0.3); border-radius: 8px; overflow-y: auto; padding:8px; font-family: monospace; color:#a5d6ff;" id="${editorId}-output">Výstup se zobrazí zde...</div>
+                    <div class="editor-output" id="${editorId}-output">Výstup se zobrazí zde...</div>
                 </div>
             `;
             const winId = createWindow('Code Editor', content, 750, 600, 250, 150);
@@ -1549,19 +1586,24 @@ HTML_TEMPLATE = """
                 runBtn.addEventListener('click', () => {
                     const code = cm.getValue();
                     const lang = langSelect.value;
-                    outputDiv.innerHTML = `Spouštím ${lang}...\\n`;
-                    fetch('/api/run', {
+                    outputDiv.innerHTML = 'Odesílám kód do Telegram skupiny...';
+                    fetch('/api/run-telegram', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ code: code, lang: lang })
                     })
-                    .then(r => r.text())
-                    .then(output => {
-                        outputDiv.innerHTML += output;
-                        outputDiv.scrollTop = outputDiv.scrollHeight;
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.error) {
+                            outputDiv.innerHTML = 'Chyba: ' + data.error;
+                            return;
+                        }
+                        const reqId = data.request_id;
+                        outputDiv.innerHTML = 'Čekám na výsledek...';
+                        pollOutput(reqId, outputDiv);
                     })
                     .catch(err => {
-                        outputDiv.innerHTML += `Chyba: ${err}`;
+                        outputDiv.innerHTML = 'Chyba při odesílání: ' + err;
                     });
                 });
 
@@ -1569,6 +1611,35 @@ HTML_TEMPLATE = """
             }, 100);
         }
 
+        function pollOutput(reqId, outputDiv) {
+            let attempts = 0;
+            const maxAttempts = 60;
+            const interval = setInterval(() => {
+                fetch(`/api/poll-output/${reqId}`)
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.status === 'done') {
+                            clearInterval(interval);
+                            outputDiv.innerHTML = data.output.replace(/\\n/g, '<br>');
+                        } else if (data.status === 'pending') {
+                            attempts++;
+                            if (attempts > maxAttempts) {
+                                clearInterval(interval);
+                                outputDiv.innerHTML = 'Čas vypršel (60s). Zkus to znovu.';
+                            }
+                        }
+                    })
+                    .catch(() => {
+                        attempts++;
+                        if (attempts > maxAttempts) {
+                            clearInterval(interval);
+                            outputDiv.innerHTML = 'Chyba při dotazování.';
+                        }
+                    });
+            }, 1000);
+        }
+
+        // ==================== HRY ====================
         function openPong() {
             const gameId = 'pong-' + Date.now();
             const content = `
@@ -1944,6 +2015,7 @@ HTML_TEMPLATE = """
             createWindow('Hry', content, 500, 300, 250, 150);
         }
 
+        // ==================== NASTAVENÍ ====================
         function openSettings() {
             fetch('/api/system-info')
                 .then(r => r.json())
@@ -2372,83 +2444,121 @@ HTML_TEMPLATE = """
 </html>
 """
 
-# ============================================================================
-# Spuštění serveru
-# ============================================================================
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
 EOF
 
-echo "🤖 Vytvářím Telegram bota (telebot, synchronní)..."
-cat > bot.py << 'EOF'
+echo "🤖 Vytvářím Telegram runner bota (Bot B)..."
+cat > bot_runner.py << 'EOF'
 #!/usr/bin/env python3
 """
-Telegram bot pro MeowOS – synchronní verze s telebot.
-Přijímá příkazy, spouští je na RPi a posílá výstup zpět.
+Bot B (@Sjgshahbot) – čte kód ze skupiny, spouští ho a odesílá výstup.
 """
-import subprocess
 import telebot
+import subprocess
+import tempfile
 import os
-import threading
 import time
 
-TOKEN = "8514852844:AAFP5pYdkbOFIieo3oGEvhM3sDGJX7yVKKY"
-bot = telebot.TeleBot(TOKEN)
+TOKEN_B = "8500321366:AAGAMwA3aV9Ot47u4HVF_6RDdW6jeWujNjM"
+bot = telebot.TeleBot(TOKEN_B)
+
+group_chat_id = None
 
 @bot.message_handler(commands=['start'])
-def send_welcome(message):
-    bot.reply_to(message, 
-                 "MeowOS Telegram Terminál\n"
-                 "Zadej libovolný příkaz a já ho spustím na RPi.\n"
-                 "Upozornění: Tento bot je veřejný – každý, kdo zná tento účet, může spouštět příkazy!")
+def start(message):
+    global group_chat_id
+    if message.chat.type in ['group', 'supergroup']:
+        group_chat_id = message.chat.id
+        with open(os.path.expanduser('~/meowos/group_chat_id.txt'), 'w') as f:
+            f.write(str(group_chat_id))
+        bot.reply_to(message, "Bot B připraven, skupina nastavena.")
+    else:
+        bot.reply_to(message, "Přidej mě do skupiny a tam pošli /start.")
 
-@bot.message_handler(func=lambda message: True)
-def run_command(message):
-    command = message.text
-    if not command.strip():
+@bot.message_handler(func=lambda message: message.chat.id == group_chat_id)
+def handle_group_message(message):
+    if not message.text or not message.text.startswith("CODE:"):
         return
-    bot.reply_to(message, f"Spouštím: {command}")
+    lines = message.text.split('\n', 1)
+    header = lines[0]
+    if len(lines) < 2:
+        return
+    code = lines[1]
     try:
-        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=30)
-        output = result.stdout + result.stderr
-        if len(output) > 4000:
-            output = output[:4000] + "\n... (výstup zkrácen)"
-        bot.reply_to(message, f"```\n{output}\n```", parse_mode='Markdown')
-    except subprocess.TimeoutExpired:
-        bot.reply_to(message, "Příkaz trval déle než 30 sekund a byl ukončen.")
-    except Exception as e:
-        bot.reply_to(message, f"Chyba: {e}")
+        _, lang, req_id = header.split(':', 2)
+    except:
+        return
+    output = run_code(code, lang)
+    reply = f"OUTPUT:{req_id}\n{output}"
+    bot.send_message(group_chat_id, reply)
 
-def run_bot():
-    """Spustí bota v samostatném vlákně."""
-    print("🤖 Telegram bot (telebot) spuštěn...")
-    bot.infinity_polling()
+def run_code(code, lang):
+    timeout = 10
+    with tempfile.TemporaryDirectory() as tmpdir:
+        if lang == 'python':
+            file_path = os.path.join(tmpdir, 'script.py')
+            with open(file_path, 'w') as f:
+                f.write(code)
+            try:
+                result = subprocess.run(['python3', file_path], capture_output=True, text=True, timeout=timeout)
+                return result.stdout + result.stderr
+            except subprocess.TimeoutExpired:
+                return f"Chyba: běh trval déle než {timeout} sekund."
+        elif lang == 'c':
+            file_path = os.path.join(tmpdir, 'program.c')
+            with open(file_path, 'w') as f:
+                f.write(code)
+            try:
+                compile_result = subprocess.run(['gcc', file_path, '-o', os.path.join(tmpdir, 'program')], capture_output=True, text=True, timeout=timeout)
+                if compile_result.returncode != 0:
+                    return compile_result.stderr
+                run_result = subprocess.run([os.path.join(tmpdir, 'program')], capture_output=True, text=True, timeout=timeout)
+                return run_result.stdout + run_result.stderr
+            except subprocess.TimeoutExpired:
+                return f"Chyba: běh trval déle než {timeout} sekund."
+        elif lang == 'go':
+            file_path = os.path.join(tmpdir, 'program.go')
+            with open(file_path, 'w') as f:
+                f.write(code)
+            try:
+                result = subprocess.run(['go', 'run', file_path], capture_output=True, text=True, timeout=timeout)
+                return result.stdout + result.stderr
+            except subprocess.TimeoutExpired:
+                return f"Chyba: běh trval déle než {timeout} sekund."
+        elif lang == 'bash':
+            file_path = os.path.join(tmpdir, 'script.sh')
+            with open(file_path, 'w') as f:
+                f.write(code)
+            try:
+                result = subprocess.run(['bash', file_path], capture_output=True, text=True, timeout=timeout)
+                return result.stdout + result.stderr
+            except subprocess.TimeoutExpired:
+                return f"Chyba: běh trval déle než {timeout} sekund."
+        else:
+            return "Nepodporovaný jazyk."
 
-if __name__ == '__main__':
-    run_bot()
+print("🤖 Bot B (runner) spuštěn...")
+bot.infinity_polling()
 EOF
 
-chmod +x bot.py
+chmod +x bot_runner.py
 
-echo "✅ Vše připraveno."
-echo "🚀 Spouštím Flask server a Telegram bota (v samostatném vlákně)..."
+echo "✅ Vše připraveno (2400+ řádků)."
+echo "🚀 Spouštím Flask server a Telegram runner bota..."
+echo "Nejprve přidej oba boty do skupiny MeowOS (https://t.me/+kKM3O4IJ_W9jNWE0) a ve skupině pošli /start."
 
-# Spustíme Flask v hlavním vlákně a bota v samostatném
 python3 app.py &
 FLASK_PID=$!
 
-# Krátce počkáme, než Flask nastartuje
-sleep 2
-
-# Spustíme bota v novém vlákně (běží samostatně)
-python3 bot.py &
+sleep 3
+python3 bot_runner.py &
 BOT_PID=$!
 
 echo "Flask server běží na pozadí (PID: $FLASK_PID)."
-echo "Telegram bot běží na pozadí (PID: $BOT_PID)."
+echo "Telegram bot B (runner) běží na pozadí (PID: $BOT_PID)."
 echo "Pro ukončení obou procesů použij: kill $FLASK_PID $BOT_PID"
 
-# Čekáme na ukončení (Ctrl+C)
 wait $FLASK_PID
 wait $BOT_PID
 EOF
