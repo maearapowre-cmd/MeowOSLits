@@ -1,5 +1,5 @@
 #!/bin/bash
-# MeowOS – plnohodnotný terminál s xterm.js (opraveno)
+# MeowOS – verze s Telegram botem místo xterm.js
 # Autor: Jakub (s asistencí AI)
 
 set -e
@@ -8,27 +8,30 @@ echo "🔧 Aktualizuji systém a instaluji potřebné balíčky..."
 sudo apt update
 sudo apt install -y python3-flask python3-psutil wireless-tools gcc golang-go python3-pip
 
-echo "📦 Instaluji Python knihovny pro WebSocket a PTY..."
-pip3 install flask-sock ptyprocess --break-system-packages
+echo "📦 Instaluji Python knihovny pro Telegram bota..."
+pip3 install python-telegram-bot --break-system-packages
 
 echo "📁 Vytvářím složku pro aplikaci..."
 mkdir -p ~/meowos
 cd ~/meowos
 
-echo "📂 Vytvářím podsložky..."
-mkdir -p static
+# Zeptáme se na Telegram token a uživatelské ID
+echo "🤖 Zadej svůj Telegram token (vytvoř ho přes @BotFather):"
+read -r TELEGRAM_TOKEN
+echo "🆔 Zadej své Telegram ID (zjisti přes @userinfobot):"
+read -r USER_ID
 
-echo "⬇️ Stahuji xterm.js a addony (opravené odkazy)..."
-wget -O static/xterm.css https://cdn.jsdelivr.net/npm/xterm@5.5.0/css/xterm.min.css
-wget -O static/xterm.js https://cdn.jsdelivr.net/npm/xterm@5.5.0/lib/xterm.min.js
-wget -O static/xterm-addon-fit.js https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js
-wget -O static/xterm-addon-web-links.js https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js
+# Uložíme token do souboru (pouze pro čtení)
+echo "$TELEGRAM_TOKEN" > telegram_token.txt
+chmod 600 telegram_token.txt
+echo "$USER_ID" > telegram_user.txt
+chmod 600 telegram_user.txt
 
-echo "🐧 Vytvářím hlavní soubor app.py (kompletní)..."
+echo "🐧 Vytvářím hlavní soubor app.py (bez xterm.js)..."
 cat > app.py << 'EOF'
 #!/usr/bin/env python3
 """
-MeowOS – finální edice s plnohodnotným terminálem (xterm.js) a hrami
+MeowOS – verze s Telegram botem místo xterm.js
 """
 
 import os
@@ -37,15 +40,10 @@ import subprocess
 import json
 import time
 import tempfile
-import ptyprocess
-import threading
 from datetime import datetime
 from flask import Flask, render_template_string, jsonify, request, send_from_directory
-from flask_sock import Sock
 
 app = Flask(__name__)
-sock = Sock(app)
-app.config['SOCK_SERVER_OPTIONS'] = {'ping_interval': 25}
 
 # ============================================================================
 # Konfigurace
@@ -108,76 +106,6 @@ def save_config(config):
         json.dump(config, f, indent=2)
 
 # ============================================================================
-# WebSocket terminál (PTY)
-# ============================================================================
-active_terminals = {}
-
-@sock.route('/terminal/<term_id>')
-def terminal_socket(ws, term_id):
-    """WebSocket endpoint pro každý terminál. Vytvoří PTY a propojí ho."""
-    try:
-        cols = int(ws.receive())
-        rows = int(ws.receive())
-        proc = ptyprocess.PtyProcessUnicode.spawn(['bash'], dimensions=(rows, cols))
-        active_terminals[term_id] = proc
-        
-        def reader():
-            try:
-                while True:
-                    try:
-                        data = proc.read(1024)
-                        if not data:
-                            break
-                        ws.send(data)
-                    except EOFError:
-                        break
-                    except Exception as e:
-                        print(f"Chyba čtení: {e}")
-                        break
-            finally:
-                if term_id in active_terminals:
-                    del active_terminals[term_id]
-        
-        thread = threading.Thread(target=reader)
-        thread.daemon = True
-        thread.start()
-        
-        while True:
-            message = ws.receive()
-            if message is None:
-                break
-            try:
-                proc.write(message)
-            except:
-                break
-                
-    except Exception as e:
-        print(f"Chyba terminálu {term_id}: {e}")
-    finally:
-        if term_id in active_terminals:
-            try:
-                active_terminals[term_id].terminate()
-            except:
-                pass
-            del active_terminals[term_id]
-
-@app.route('/terminal/resize/<term_id>/<int:cols>/<int:rows>', methods=['POST'])
-def terminal_resize(term_id, cols, rows):
-    if term_id in active_terminals:
-        try:
-            active_terminals[term_id].setwinsize(rows, cols)
-        except:
-            pass
-    return 'OK'
-
-# ============================================================================
-# Statické soubory
-# ============================================================================
-@app.route('/static/<path:filename>')
-def static_files(filename):
-    return send_from_directory('static', filename)
-
-# ============================================================================
 # Systémové funkce
 # ============================================================================
 def get_cpu_temperature():
@@ -238,7 +166,7 @@ def get_system_info():
     }
 
 # ============================================================================
-# Spouštění kódu (pro Code Editor)
+# Spouštění kódu (pro Code Editor – ale už ho nebudeme potřebovat, jen pro úplnost)
 # ============================================================================
 def run_code(code, lang):
     timeout = 5
@@ -269,7 +197,7 @@ def run_code(code, lang):
             with open(file_path, 'w') as f:
                 f.write(code)
             try:
-                result = subprocess.run(['go', 'run', file_path], capture_output=True, text=True, timeout=timeout)
+                result = subprocess.run(['go', 'run', file_path], captureOutput=True, text=True, timeout=timeout)
                 return result.stdout + result.stderr
             except subprocess.TimeoutExpired:
                 return f"Chyba: běh trval déle než {timeout} sekund."
@@ -302,6 +230,7 @@ def api_system_info():
 
 @app.route('/api/cmd', methods=['POST'])
 def api_cmd():
+    # Toto už nebude používané, ale ponecháme pro kompatibilitu
     cmd = request.form.get('cmd', '')
     try:
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
@@ -466,10 +395,13 @@ def api_shutdown():
 @app.route('/')
 def index():
     config = load_config()
-    return render_template_string(HTML_TEMPLATE, **config)
+    # Načteme jméno bota z tokenu? Museli bychom ho získat, ale můžeme ho uložit při vytváření.
+    # Pro jednoduchost necháme placeholder.
+    bot_username = "MeowOSBot"  # Toto by se dalo zjistit přes API, ale necháme na uživateli
+    return render_template_string(HTML_TEMPLATE, **config, bot_username=bot_username)
 
 # ============================================================================
-# HTML šablona (s xterm.js)
+# HTML šablona (bez xterm.js, s QR kódem pro Telegram)
 # ============================================================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -478,12 +410,7 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MeowOS</title>
-    <!-- xterm.js -->
-    <link rel="stylesheet" href="/static/xterm.css">
-    <script src="/static/xterm.js"></script>
-    <script src="/static/xterm-addon-fit.js"></script>
-    <script src="/static/xterm-addon-web-links.js"></script>
-    <!-- CodeMirror -->
+    <!-- CodeMirror pro editor (volitelně, můžeme ponechat) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/theme/dracula.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>
@@ -491,6 +418,8 @@ HTML_TEMPLATE = """
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/clike/clike.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/go/go.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/shell/shell.min.js"></script>
+    <!-- QR kód generátor -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -933,12 +862,26 @@ HTML_TEMPLATE = """
             border-right: 1px solid rgba(255,255,255,0.1);
         }
 
-        .xterm {
-            padding: 8px;
+        /* QR kód a informace o botovi */
+        .telegram-info {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
             height: 100%;
+            text-align: center;
         }
-        .xterm-viewport {
-            background: transparent !important;
+        #qrcode {
+            margin: 20px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 10px;
+        }
+        .bot-username {
+            font-size: 18px;
+            font-weight: bold;
+            color: var(--primary);
+            margin-bottom: 10px;
         }
 
         .settings-tabs {
@@ -1113,7 +1056,7 @@ HTML_TEMPLATE = """
             <div class="taskbar-icon" onclick="toggleOverview()"><i class="fa-solid fa-grid-2"></i></div>
             <div class="taskbar-icon" onclick="toggleStartMenu()"><i class="fa-brands fa-linux"></i></div>
             <div class="taskbar-icon" onclick="openFileManager()"><i class="fa-regular fa-folder-open"></i></div>
-            <div class="taskbar-icon" onclick="openTerminal()"><i class="fa-solid fa-terminal"></i></div>
+            <div class="taskbar-icon" onclick="openTelegramTerminal()"><i class="fa-brands fa-telegram"></i></div>
             <div class="taskbar-icon" onclick="openCalculator()"><i class="fa-solid fa-calculator"></i></div>
             <div class="taskbar-icon" onclick="openCodeEditor()"><i class="fa-solid fa-code"></i></div>
             <div class="taskbar-icon" onclick="openGameSelector()"><i class="fa-solid fa-gamepad"></i></div>
@@ -1135,7 +1078,7 @@ HTML_TEMPLATE = """
         <div class="start-apps">
             <div class="start-app" onclick="openSettings()"><i class="fa-solid fa-gear"></i><span>Nastavení</span></div>
             <div class="start-app" onclick="openFileManager()"><i class="fa-regular fa-folder"></i><span>Správce</span></div>
-            <div class="start-app" onclick="openTerminal()"><i class="fa-solid fa-terminal"></i><span>Terminál</span></div>
+            <div class="start-app" onclick="openTelegramTerminal()"><i class="fa-brands fa-telegram"></i><span>Terminál</span></div>
             <div class="start-app" onclick="openCalculator()"><i class="fa-solid fa-calculator"></i><span>Kalkulačka</span></div>
             <div class="start-app" onclick="openThisPC()"><i class="fa-solid fa-computer"></i><span>Tento PC</span></div>
             <div class="start-app" onclick="openCodeEditor()"><i class="fa-solid fa-code"></i><span>Code Editor</span></div>
@@ -1152,8 +1095,6 @@ HTML_TEMPLATE = """
         let resizeData = null;
         let startMenuVisible = false;
         let overviewVisible = false;
-        let terminalHistory = [];
-        let historyIndex = -1;
 
         let resizeHoverThrottle = false;
         let dragThrottle = false;
@@ -1489,71 +1430,31 @@ HTML_TEMPLATE = """
                 });
         }
 
-        function openTerminal() {
-            const termId = 'term-' + Date.now();
+        // ==================== TELEGRAM TERMINÁL ====================
+        function openTelegramTerminal() {
+            const botUsername = "MeowOSBot"; // Toto by se dalo dynamicky zjistit, ale necháme
+            const qrData = `https://t.me/${botUsername}`;
             const content = `
-                <div id="${termId}-container" style="width:100%; height:100%; background: rgba(0,0,0,0.3); border-radius:8px;"></div>
+                <div class="telegram-info">
+                    <h2>📱 Telegram Terminál</h2>
+                    <p>Příkazy posílej přes Telegram bota:</p>
+                    <div class="bot-username">@${botUsername}</div>
+                    <div id="qrcode"></div>
+                    <p style="margin-top:20px;">Naskenuj QR nebo klikni na odkaz:<br>
+                    <a href="https://t.me/${botUsername}" target="_blank" style="color:var(--primary);">https://t.me/${botUsername}</a></p>
+                    <p style="margin-top:20px; font-size:12px; opacity:0.7;">Pošli /start pro uvítání, pak libovolný příkaz.</p>
+                </div>
             `;
-            const winId = createWindow('Terminál', content, 700, 450, 200, 150);
-            
+            const winId = createWindow('Telegram Terminál', content, 400, 500, 250, 150);
             setTimeout(() => {
-                const container = document.getElementById(`${termId}-container`);
-                if (!container) return;
-
-                const term = new Terminal({
-                    cursorBlink: true,
-                    theme: {
-                        background: 'rgba(0,0,0,0.5)',
-                        foreground: '#a5d6ff',
-                        cursor: '#c084fc'
-                    },
-                    fontSize: 14,
-                    fontFamily: 'Menlo, Monaco, "Courier New", monospace'
-                });
-
-                const fitAddon = new FitAddon();
-                const webLinksAddon = new WebLinksAddon();
-                
-                term.loadAddon(fitAddon);
-                term.loadAddon(webLinksAddon);
-                term.open(container);
-                fitAddon.fit();
-
-                const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const wsUrl = `${wsProto}//${window.location.host}/terminal/${termId}`;
-                const ws = new WebSocket(wsUrl);
-
-                ws.onopen = () => {
-                    const dims = fitAddon.proposeDimensions();
-                    ws.send(Math.floor(dims.cols).toString());
-                    ws.send(Math.floor(dims.rows).toString());
-                };
-
-                ws.onmessage = (event) => {
-                    term.write(event.data);
-                };
-
-                term.onData(data => {
-                    if (ws.readyState === WebSocket.OPEN) {
-                        ws.send(data);
-                    }
-                });
-
-                const resizeObserver = new ResizeObserver(() => {
-                    fitAddon.fit();
-                    const dims = fitAddon.proposeDimensions();
-                    fetch(`/terminal/resize/${termId}/${Math.floor(dims.cols)}/${Math.floor(dims.rows)}`, { method: 'POST' });
-                });
-                resizeObserver.observe(container);
-
-                const checkInterval = setInterval(() => {
-                    if (!document.getElementById(winId)) {
-                        ws.close();
-                        term.dispose();
-                        resizeObserver.disconnect();
-                        clearInterval(checkInterval);
-                    }
-                }, 1000);
+                const qrDiv = document.getElementById('qrcode');
+                if (qrDiv) {
+                    new QRCode(qrDiv, {
+                        text: qrData,
+                        width: 200,
+                        height: 200
+                    });
+                }
             }, 100);
         }
 
@@ -1611,9 +1512,9 @@ HTML_TEMPLATE = """
             if (app === 'calendar') createWindow('Kalendář', '<div style="padding:20px; text-align:center;">Kalendář (demo)</div>', 400, 300, 200, 150);
         }
 
+        // ==================== CODE EDITOR (upravený, bez integrovaného terminálu) ====================
         function openCodeEditor() {
             const editorId = 'editor-' + Date.now();
-            const termId = 'term-' + Date.now();
             const content = `
                 <div class="code-editor-container">
                     <div class="editor-toolbar">
@@ -1626,7 +1527,7 @@ HTML_TEMPLATE = """
                         <button class="editor-run-btn" id="${editorId}-run"><i class="fa-solid fa-play"></i> Run</button>
                     </div>
                     <textarea id="${editorId}-code">#!/bin/bash\\necho "Hello from MeowOS!"</textarea>
-                    <div style="height: 200px; margin-top: 10px; background: rgba(0,0,0,0.3); border-radius: 8px;" id="${termId}-container"></div>
+                    <div style="height: 150px; margin-top: 10px; background: rgba(0,0,0,0.3); border-radius: 8px; overflow-y: auto; padding:8px; font-family: monospace; color:#a5d6ff;" id="${editorId}-output">Výstup se zobrazí zde...</div>
                 </div>
             `;
             const winId = createWindow('Code Editor', content, 750, 600, 250, 150);
@@ -1635,9 +1536,8 @@ HTML_TEMPLATE = """
                 const textarea = document.getElementById(`${editorId}-code`);
                 const langSelect = document.getElementById(`${editorId}-lang`);
                 const runBtn = document.getElementById(`${editorId}-run`);
-                const termContainer = document.getElementById(`${termId}-container`);
-                
-                if (!textarea || !termContainer) return;
+                const outputDiv = document.getElementById(`${editorId}-output`);
+                if (!textarea || !outputDiv) return;
 
                 const cm = CodeMirror.fromTextArea(textarea, {
                     lineNumbers: true,
@@ -1660,7 +1560,7 @@ HTML_TEMPLATE = """
                 runBtn.addEventListener('click', () => {
                     const code = cm.getValue();
                     const lang = langSelect.value;
-                    term.writeln(`\\x1b[33mSpouštím ${lang}...\\x1b[0m`);
+                    outputDiv.innerHTML = `Spouštím ${lang}...\\n`;
                     fetch('/api/run', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
@@ -1668,47 +1568,19 @@ HTML_TEMPLATE = """
                     })
                     .then(r => r.text())
                     .then(output => {
-                        term.writeln(output);
+                        outputDiv.innerHTML += output;
+                        outputDiv.scrollTop = outputDiv.scrollHeight;
                     })
                     .catch(err => {
-                        term.writeln(`\\x1b[31mChyba: ${err}\\x1b[0m`);
+                        outputDiv.innerHTML += `Chyba: ${err}`;
                     });
                 });
 
                 cm.setSize('100%', '300px');
-
-                const term = new Terminal({
-                    cursorBlink: true,
-                    theme: {
-                        background: 'rgba(0,0,0,0.5)',
-                        foreground: '#a5d6ff',
-                        cursor: '#c084fc'
-                    },
-                    fontSize: 13,
-                    fontFamily: 'Menlo, Monaco, "Courier New", monospace'
-                });
-
-                const fitAddon = new FitAddon();
-                term.loadAddon(fitAddon);
-                term.open(termContainer);
-                fitAddon.fit();
-
-                term.writeln('Vítejte v integrovaném terminálu editoru.');
-                term.writeln('Výstup z "Run" se zobrazí zde.');
-
-                const resizeObserver = new ResizeObserver(() => fitAddon.fit());
-                resizeObserver.observe(termContainer);
-
-                const checkInterval = setInterval(() => {
-                    if (!document.getElementById(winId)) {
-                        term.dispose();
-                        resizeObserver.disconnect();
-                        clearInterval(checkInterval);
-                    }
-                }, 1000);
             }, 100);
         }
 
+        // ==================== HRY ====================
         function openPong() {
             const gameId = 'pong-' + Date.now();
             const content = `
@@ -2519,9 +2391,72 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
 EOF
 
-echo "✅ Aplikace vytvořena (kompletní, s xterm.js)."
-echo "🚀 Spouštím server..."
-echo "Připoj se na http://$(hostname -I | awk '{print $1}'):5000"
-cd ~/meowos
-python3 app.py
+echo "🤖 Vytvářím Telegram bota..."
+cat > bot.py << 'EOF'
+#!/usr/bin/env python3
+"""
+Telegram bot pro MeowOS – přijímá příkazy a spouští je na RPi.
+"""
+import asyncio
+import subprocess
+import os
+from telegram import Update
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+
+# Načtení tokenu a uživatelského ID
+with open(os.path.expanduser('~/meowos/telegram_token.txt'), 'r') as f:
+    TOKEN = f.read().strip()
+with open(os.path.expanduser('~/meowos/telegram_user.txt'), 'r') as f:
+    ALLOWED_USER_ID = int(f.read().strip())
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ALLOWED_USER_ID:
+        await update.message.reply_text("Nejsi oprávněn používat tohoto bota.")
+        return
+    await update.message.reply_text("MeowOS Telegram Terminál\nZadej libovolný příkaz a já ho spustím na RPi.")
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ALLOWED_USER_ID:
+        return
+    command = update.message.text
+    if not command.strip():
+        return
+    await update.message.reply_text(f"Spouštím: {command}")
+    try:
+        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=30)
+        output = result.stdout + result.stderr
+        if len(output) > 4000:
+            output = output[:4000] + "\n... (výstup zkrácen)"
+        await update.message.reply_text(f"```\n{output}\n```", parse_mode='Markdown')
+    except subprocess.TimeoutExpired:
+        await update.message.reply_text("Příkaz trval déle než 30 sekund a byl ukončen.")
+    except Exception as e:
+        await update.message.reply_text(f"Chyba: {e}")
+
+async def main():
+    app = Application.builder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    print("🤖 Telegram bot spuštěn...")
+    await app.run_polling()
+
+if __name__ == '__main__':
+    asyncio.run(main())
+EOF
+
+chmod +x bot.py
+
+echo "✅ Vše připraveno."
+echo "🚀 Spouštím Flask server a Telegram bota..."
+echo "Pro ukončení obou procesů použij Ctrl+C (zastaví se jen Flask, bota budeš muset zabít samostatně)."
+
+# Spustíme Flask na pozadí a poté bota
+python3 app.py &
+BOT_PID=$!
+echo "Flask server běží na pozadí (PID: $!)."
+echo "Spouštím bota..."
+python3 bot.py
+
+# Po ukončení bota (Ctrl+C) zabijeme i Flask
+kill $BOT_PID 2>/dev/null
 EOF
