@@ -1,5 +1,5 @@
 #!/bin/bash
-# MeowOS – verze s Telegram botem místo xterm.js
+# MeowOS – verze s Telegram botem (veřejný, pevný token)
 # Autor: Jakub (s asistencí AI)
 
 set -e
@@ -15,23 +15,16 @@ echo "📁 Vytvářím složku pro aplikaci..."
 mkdir -p ~/meowos
 cd ~/meowos
 
-# Zeptáme se na Telegram token a uživatelské ID
-echo "🤖 Zadej svůj Telegram token (vytvoř ho přes @BotFather):"
-read -r TELEGRAM_TOKEN
-echo "🆔 Zadej své Telegram ID (zjisti přes @userinfobot):"
-read -r USER_ID
-
-# Uložíme token do souboru (pouze pro čtení)
+# Pevný token (uživatelův)
+TELEGRAM_TOKEN="8514852844:AAFP5pYdkbOFIieo3oGEvhM3sDGJX7yVKKY"
 echo "$TELEGRAM_TOKEN" > telegram_token.txt
 chmod 600 telegram_token.txt
-echo "$USER_ID" > telegram_user.txt
-chmod 600 telegram_user.txt
 
-echo "🐧 Vytvářím hlavní soubor app.py (bez xterm.js)..."
+echo "🐧 Vytvářím hlavní soubor app.py..."
 cat > app.py << 'EOF'
 #!/usr/bin/env python3
 """
-MeowOS – verze s Telegram botem místo xterm.js
+MeowOS – webové rozhraní s QR kódem pro Telegram bota
 """
 
 import os
@@ -41,7 +34,7 @@ import json
 import time
 import tempfile
 from datetime import datetime
-from flask import Flask, render_template_string, jsonify, request, send_from_directory
+from flask import Flask, render_template_string, jsonify, request
 
 app = Flask(__name__)
 
@@ -166,7 +159,7 @@ def get_system_info():
     }
 
 # ============================================================================
-# Spouštění kódu (pro Code Editor – ale už ho nebudeme potřebovat, jen pro úplnost)
+# Spouštění kódu (pro Code Editor)
 # ============================================================================
 def run_code(code, lang):
     timeout = 5
@@ -197,7 +190,7 @@ def run_code(code, lang):
             with open(file_path, 'w') as f:
                 f.write(code)
             try:
-                result = subprocess.run(['go', 'run', file_path], captureOutput=True, text=True, timeout=timeout)
+                result = subprocess.run(['go', 'run', file_path], capture_output=True, text=True, timeout=timeout)
                 return result.stdout + result.stderr
             except subprocess.TimeoutExpired:
                 return f"Chyba: běh trval déle než {timeout} sekund."
@@ -230,7 +223,6 @@ def api_system_info():
 
 @app.route('/api/cmd', methods=['POST'])
 def api_cmd():
-    # Toto už nebude používané, ale ponecháme pro kompatibilitu
     cmd = request.form.get('cmd', '')
     try:
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
@@ -395,13 +387,12 @@ def api_shutdown():
 @app.route('/')
 def index():
     config = load_config()
-    # Načteme jméno bota z tokenu? Museli bychom ho získat, ale můžeme ho uložit při vytváření.
-    # Pro jednoduchost necháme placeholder.
-    bot_username = "MeowOSBot"  # Toto by se dalo zjistit přes API, ale necháme na uživateli
+    # Zjistíme username bota – jednoduché, necháme placeholder
+    bot_username = "MeowOSBot"  # Uživatel si musí zjistit sám
     return render_template_string(HTML_TEMPLATE, **config, bot_username=bot_username)
 
 # ============================================================================
-# HTML šablona (bez xterm.js, s QR kódem pro Telegram)
+# HTML šablona (bez xterm.js, s QR kódem)
 # ============================================================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -410,7 +401,7 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MeowOS</title>
-    <!-- CodeMirror pro editor (volitelně, můžeme ponechat) -->
+    <!-- CodeMirror -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/theme/dracula.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>
@@ -418,7 +409,6 @@ HTML_TEMPLATE = """
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/clike/clike.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/go/go.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/shell/shell.min.js"></script>
-    <!-- QR kód generátor -->
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
         * {
@@ -1430,9 +1420,8 @@ HTML_TEMPLATE = """
                 });
         }
 
-        // ==================== TELEGRAM TERMINÁL ====================
         function openTelegramTerminal() {
-            const botUsername = "MeowOSBot"; // Toto by se dalo dynamicky zjistit, ale necháme
+            const botUsername = "{{ bot_username }}";
             const qrData = `https://t.me/${botUsername}`;
             const content = `
                 <div class="telegram-info">
@@ -1443,9 +1432,10 @@ HTML_TEMPLATE = """
                     <p style="margin-top:20px;">Naskenuj QR nebo klikni na odkaz:<br>
                     <a href="https://t.me/${botUsername}" target="_blank" style="color:var(--primary);">https://t.me/${botUsername}</a></p>
                     <p style="margin-top:20px; font-size:12px; opacity:0.7;">Pošli /start pro uvítání, pak libovolný příkaz.</p>
+                    <p style="color: #ff5555; font-weight: bold;">Upozornění: Bot je veřejný – kdokoli může spouštět příkazy!</p>
                 </div>
             `;
-            const winId = createWindow('Telegram Terminál', content, 400, 500, 250, 150);
+            const winId = createWindow('Telegram Terminál', content, 400, 550, 250, 150);
             setTimeout(() => {
                 const qrDiv = document.getElementById('qrcode');
                 if (qrDiv) {
@@ -1512,7 +1502,6 @@ HTML_TEMPLATE = """
             if (app === 'calendar') createWindow('Kalendář', '<div style="padding:20px; text-align:center;">Kalendář (demo)</div>', 400, 300, 200, 150);
         }
 
-        // ==================== CODE EDITOR (upravený, bez integrovaného terminálu) ====================
         function openCodeEditor() {
             const editorId = 'editor-' + Date.now();
             const content = `
@@ -1580,7 +1569,6 @@ HTML_TEMPLATE = """
             }, 100);
         }
 
-        // ==================== HRY ====================
         function openPong() {
             const gameId = 'pong-' + Date.now();
             const content = `
@@ -2396,6 +2384,7 @@ cat > bot.py << 'EOF'
 #!/usr/bin/env python3
 """
 Telegram bot pro MeowOS – přijímá příkazy a spouští je na RPi.
+Bez omezení na ID – reaguje na všechny.
 """
 import asyncio
 import subprocess
@@ -2403,21 +2392,17 @@ import os
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# Načtení tokenu a uživatelského ID
-with open(os.path.expanduser('~/meowos/telegram_token.txt'), 'r') as f:
-    TOKEN = f.read().strip()
-with open(os.path.expanduser('~/meowos/telegram_user.txt'), 'r') as f:
-    ALLOWED_USER_ID = int(f.read().strip())
+# Pevný token (uživatelův)
+TOKEN = "8514852844:AAFP5pYdkbOFIieo3oGEvhM3sDGJX7yVKKY"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ALLOWED_USER_ID:
-        await update.message.reply_text("Nejsi oprávněn používat tohoto bota.")
-        return
-    await update.message.reply_text("MeowOS Telegram Terminál\nZadej libovolný příkaz a já ho spustím na RPi.")
+    await update.message.reply_text(
+        "MeowOS Telegram Terminál\n"
+        "Zadej libovolný příkaz a já ho spustím na RPi.\n"
+        "Upozornění: Tento bot je veřejný – každý, kdo zná tento účet, může spouštět příkazy!"
+    )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ALLOWED_USER_ID:
-        return
     command = update.message.text
     if not command.strip():
         return
