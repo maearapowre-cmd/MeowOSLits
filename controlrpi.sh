@@ -1,5 +1,5 @@
 #!/bin/bash
-# MeowOS – verze s Telegram botem (veřejný, pevný token)
+# MeowOS – finální verze s Telegram botem (telebot, synchronní)
 # Autor: Jakub (s asistencí AI)
 
 set -e
@@ -8,8 +8,8 @@ echo "🔧 Aktualizuji systém a instaluji potřebné balíčky..."
 sudo apt update
 sudo apt install -y python3-flask python3-psutil wireless-tools gcc golang-go python3-pip
 
-echo "📦 Instaluji Python knihovny pro Telegram bota..."
-pip3 install python-telegram-bot --break-system-packages
+echo "📦 Instaluji Python knihovny – telebot (pyTelegramBotAPI)..."
+pip3 install pyTelegramBotAPI --break-system-packages
 
 echo "📁 Vytvářím složku pro aplikaci..."
 mkdir -p ~/meowos
@@ -24,7 +24,7 @@ echo "🐧 Vytvářím hlavní soubor app.py..."
 cat > app.py << 'EOF'
 #!/usr/bin/env python3
 """
-MeowOS – webové rozhraní s QR kódem pro Telegram bota
+MeowOS – webové rozhraní s QR kódem pro Telegram bota (telebot)
 """
 
 import os
@@ -33,6 +33,7 @@ import subprocess
 import json
 import time
 import tempfile
+import threading
 from datetime import datetime
 from flask import Flask, render_template_string, jsonify, request
 
@@ -387,7 +388,6 @@ def api_shutdown():
 @app.route('/')
 def index():
     config = load_config()
-    # Zjistíme username bota – jednoduché, necháme placeholder
     bot_username = "MeowOSBot"  # Uživatel si musí zjistit sám
     return render_template_string(HTML_TEMPLATE, **config, bot_username=bot_username)
 
@@ -2379,69 +2379,76 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
 EOF
 
-echo "🤖 Vytvářím Telegram bota..."
+echo "🤖 Vytvářím Telegram bota (telebot, synchronní)..."
 cat > bot.py << 'EOF'
 #!/usr/bin/env python3
 """
-Telegram bot pro MeowOS – přijímá příkazy a spouští je na RPi.
-Bez omezení na ID – reaguje na všechny.
+Telegram bot pro MeowOS – synchronní verze s telebot.
+Přijímá příkazy, spouští je na RPi a posílá výstup zpět.
 """
-import asyncio
 import subprocess
+import telebot
 import os
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+import threading
+import time
 
-# Pevný token (uživatelův)
 TOKEN = "8514852844:AAFP5pYdkbOFIieo3oGEvhM3sDGJX7yVKKY"
+bot = telebot.TeleBot(TOKEN)
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "MeowOS Telegram Terminál\n"
-        "Zadej libovolný příkaz a já ho spustím na RPi.\n"
-        "Upozornění: Tento bot je veřejný – každý, kdo zná tento účet, může spouštět příkazy!"
-    )
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
+    bot.reply_to(message, 
+                 "MeowOS Telegram Terminál\n"
+                 "Zadej libovolný příkaz a já ho spustím na RPi.\n"
+                 "Upozornění: Tento bot je veřejný – každý, kdo zná tento účet, může spouštět příkazy!")
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    command = update.message.text
+@bot.message_handler(func=lambda message: True)
+def run_command(message):
+    command = message.text
     if not command.strip():
         return
-    await update.message.reply_text(f"Spouštím: {command}")
+    bot.reply_to(message, f"Spouštím: {command}")
     try:
         result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=30)
         output = result.stdout + result.stderr
         if len(output) > 4000:
             output = output[:4000] + "\n... (výstup zkrácen)"
-        await update.message.reply_text(f"```\n{output}\n```", parse_mode='Markdown')
+        bot.reply_to(message, f"```\n{output}\n```", parse_mode='Markdown')
     except subprocess.TimeoutExpired:
-        await update.message.reply_text("Příkaz trval déle než 30 sekund a byl ukončen.")
+        bot.reply_to(message, "Příkaz trval déle než 30 sekund a byl ukončen.")
     except Exception as e:
-        await update.message.reply_text(f"Chyba: {e}")
+        bot.reply_to(message, f"Chyba: {e}")
 
-async def main():
-    app = Application.builder().token(TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    print("🤖 Telegram bot spuštěn...")
-    await app.run_polling()
+def run_bot():
+    """Spustí bota v samostatném vlákně."""
+    print("🤖 Telegram bot (telebot) spuštěn...")
+    bot.infinity_polling()
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    run_bot()
 EOF
 
 chmod +x bot.py
 
 echo "✅ Vše připraveno."
-echo "🚀 Spouštím Flask server a Telegram bota..."
-echo "Pro ukončení obou procesů použij Ctrl+C (zastaví se jen Flask, bota budeš muset zabít samostatně)."
+echo "🚀 Spouštím Flask server a Telegram bota (v samostatném vlákně)..."
 
-# Spustíme Flask na pozadí a poté bota
+# Spustíme Flask v hlavním vlákně a bota v samostatném
 python3 app.py &
-BOT_PID=$!
-echo "Flask server běží na pozadí (PID: $!)."
-echo "Spouštím bota..."
-python3 bot.py
+FLASK_PID=$!
 
-# Po ukončení bota (Ctrl+C) zabijeme i Flask
-kill $BOT_PID 2>/dev/null
+# Krátce počkáme, než Flask nastartuje
+sleep 2
+
+# Spustíme bota v novém vlákně (běží samostatně)
+python3 bot.py &
+BOT_PID=$!
+
+echo "Flask server běží na pozadí (PID: $FLASK_PID)."
+echo "Telegram bot běží na pozadí (PID: $BOT_PID)."
+echo "Pro ukončení obou procesů použij: kill $FLASK_PID $BOT_PID"
+
+# Čekáme na ukončení (Ctrl+C)
+wait $FLASK_PID
+wait $BOT_PID
 EOF
