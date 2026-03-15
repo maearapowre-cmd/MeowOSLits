@@ -1,7 +1,6 @@
 #!/bin/bash
-# MeowOS – kompletní verze s plnohodnotným terminálem a hrami (Pong, Snake, Piškvorky)
+# MeowOS – kompletní verze s plnohodnotným terminálem a hrami (OPRAVENO)
 # Autor: Jakub (s asistencí AI)
-# Část 1/5 – instalace, konfigurace, WebSocket terminál
 
 set -e
 
@@ -10,7 +9,7 @@ sudo apt update
 sudo apt install -y python3-flask python3-psutil wireless-tools gcc golang-go python3-pip
 
 echo "📦 Instaluji Python knihovny pro WebSocket a PTY..."
-pip3 install flask-sock ptyprocess --break-system-packages
+pip3 install flask-sock ptyprocess --break-system-packages || pip3 install flask-sock ptyprocess
 
 echo "📁 Vytvářím složku pro aplikaci..."
 mkdir -p ~/meowos
@@ -25,7 +24,7 @@ wget -O static/xterm.js https://cdn.jsdelivr.net/npm/xterm@5.5.0/lib/xterm.min.j
 wget -O static/xterm-addon-fit.js https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js
 wget -O static/xterm-addon-web-links.js https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js
 
-echo "🐧 Vytvářím hlavní soubor app.py (část 1/5)..."
+echo "🐧 Vytvářím hlavní soubor app.py..."
 
 cat > app.py << 'EOF'
 #!/usr/bin/env python3
@@ -118,17 +117,13 @@ active_terminals = {}
 def terminal_socket(ws, term_id):
     """WebSocket endpoint pro každý terminál. Vytvoří PTY a propojí ho."""
     try:
-        # Vytvoření PTY (pseudo-terminálu)
-        cols = int(ws.receive())  # první zpráva = počet sloupců
-        rows = int(ws.receive())  # druhá zpráva = počet řádků
+        cols = int(ws.receive())
+        rows = int(ws.receive())
         
-        # Spuštění bash v PTY
         proc = ptyprocess.PtyProcessUnicode.spawn(['bash'],
                                                    dimensions=(rows, cols))
-        pid = proc.pid
         active_terminals[term_id] = proc
         
-        # Čtecí vlákno: posílá data z PTY do WebSocketu
         def reader():
             try:
                 while True:
@@ -150,7 +145,6 @@ def terminal_socket(ws, term_id):
         thread.daemon = True
         thread.start()
         
-        # Hlavní smyčka: přijímá data z WebSocketu a posílá je do PTY
         while True:
             message = ws.receive()
             if message is None:
@@ -172,7 +166,6 @@ def terminal_socket(ws, term_id):
 
 @app.route('/terminal/resize/<term_id>/<int:cols>/<int:rows>', methods=['POST'])
 def terminal_resize(term_id, cols, rows):
-    """Změna velikosti terminálu."""
     if term_id in active_terminals:
         try:
             active_terminals[term_id].setwinsize(rows, cols)
@@ -190,7 +183,8 @@ def static_files(filename):
 @app.route('/games/<path:filename>')
 def game_files(filename):
     return send_from_directory('games', filename)
-  # ============================================================================
+
+# ============================================================================
 # Systémové funkce
 # ============================================================================
 def get_cpu_temperature():
@@ -315,7 +309,6 @@ def api_system_info():
 
 @app.route('/api/cmd', methods=['POST'])
 def api_cmd():
-    """Původní jednoduchý terminál – ponecháno pro kompatibilitu."""
     cmd = request.form.get('cmd', '')
     try:
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=10)
@@ -483,7 +476,7 @@ def index():
     return render_template_string(HTML_TEMPLATE, **config)
 
 # ============================================================================
-# HTML šablona (začátek)
+# HTML šablona
 # ============================================================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -713,6 +706,7 @@ HTML_TEMPLATE = """
             padding: 6px 12px;
             border-radius: 20px;
         }
+
         #start-menu {
             position: fixed;
             {% if taskbar_position == 'bottom' %}
@@ -1089,7 +1083,6 @@ HTML_TEMPLATE = """
             border-left: 3px solid var(--primary);
         }
 
-        /* Terminál (xterm.js) – přizpůsobení */
         .xterm {
             padding: 8px;
             height: 100%;
@@ -1102,7 +1095,6 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <script>
-        // Pomocná funkce pro převod hex barvy na RGB
         function hexToRgb(hex) {
             const result = /^#?([a-f\\d]{2})([a-f\\d]{2})([a-f\\d]{2})$/i.exec(hex);
             return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '10, 20, 30';
@@ -1128,12 +1120,10 @@ HTML_TEMPLATE = """
             active_profile: {{ active_profile|tojson }}
         };
 
-        // Oprava: pokud je tapeta prázdná, nastavíme výchozí
         if (!meowConfig.wallpaper || meowConfig.wallpaper.trim() === '') {
             meowConfig.wallpaper = 'linear-gradient(145deg, #0f172a, #1e1b2b)';
         }
 
-        // Nastavení CSS proměnných pro RGB barvu widgetů (kvůli rgba)
         document.documentElement.style.setProperty('--widget-bg-rgb', meowConfig.widget_bg_rgb);
     </script>
 
@@ -1143,7 +1133,6 @@ HTML_TEMPLATE = """
         <div class="taskbar-center">
             <div class="taskbar-icon" onclick="toggleOverview()"><i class="fa-solid fa-grid-2"></i></div>
             <div class="taskbar-icon" onclick="toggleStartMenu()"><i class="fa-brands fa-linux"></i></div>
-            <!-- odstraněna ikona prohlížeče a vyhledávání -->
             <div class="taskbar-icon" onclick="openFileManager()"><i class="fa-regular fa-folder-open"></i></div>
             <div class="taskbar-icon" onclick="openTerminal()"><i class="fa-solid fa-terminal"></i></div>
             <div class="taskbar-icon" onclick="openCalculator()"><i class="fa-solid fa-calculator"></i></div>
@@ -1177,7 +1166,6 @@ HTML_TEMPLATE = """
     </div>
 
     <script>
-        // ========================= GLOBÁLNÍ PROMĚNNÉ =========================
         let windows = [];
         let zIndexCounter = 100;
         let draggedWindow = null;
@@ -1188,12 +1176,10 @@ HTML_TEMPLATE = """
         let terminalHistory = [];
         let historyIndex = -1;
 
-        // Throttling pro události pohybu myši
         let resizeHoverThrottle = false;
         let dragThrottle = false;
         let resizeThrottle = false;
 
-        // ========================= POMOCNÉ FUNKCE =========================
         function updateClock() {
             const now = new Date();
             document.getElementById('taskbar-time').innerText = now.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
@@ -1207,7 +1193,6 @@ HTML_TEMPLATE = """
         setInterval(updateWifi, 5000);
         updateWifi();
 
-        // ========================= SPRÁVA OKEN =========================
         function createWindow(title, contentHtml, width = null, height = null, x = 100, y = 100) {
             const id = 'win_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
             const desktop = document.getElementById('desktop');
@@ -1256,7 +1241,7 @@ HTML_TEMPLATE = """
             windows.push({ id, element: winDiv, title });
             return id;
         }
-        // ======== PŘESUN ========
+
         function startDrag(e, win) {
             if (e.target.closest('.window-btn') || resizeData) return;
             draggedWindow = win;
@@ -1298,7 +1283,6 @@ HTML_TEMPLATE = """
             document.removeEventListener('mouseup', stopDrag);
         }
 
-        // ======== ZMĚNA VELIKOSTI ========
         function onResizeHover(e) {
             const win = e.currentTarget;
             if (resizeData || win.classList.contains('maximized')) return;
@@ -1477,7 +1461,6 @@ HTML_TEMPLATE = """
             }
         }
 
-        // ========================= APLIKACE =========================
         function openFileManager() {
             createWindow('Správce souborů', `
                 <div style="display: flex; gap: 15px;">
@@ -1527,7 +1510,6 @@ HTML_TEMPLATE = """
                 });
         }
 
-        // ==================== NOVÝ TERMINÁL (xterm.js) ====================
         function openTerminal() {
             const termId = 'term-' + Date.now();
             const content = `
@@ -1539,7 +1521,6 @@ HTML_TEMPLATE = """
                 const container = document.getElementById(`${termId}-container`);
                 if (!container) return;
 
-                // Inicializace xterm.js
                 const term = new Terminal({
                     cursorBlink: true,
                     theme: {
@@ -1559,13 +1540,11 @@ HTML_TEMPLATE = """
                 term.open(container);
                 fitAddon.fit();
 
-                // WebSocket připojení
                 const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                 const wsUrl = `${wsProto}//${window.location.host}/terminal/${termId}`;
                 const ws = new WebSocket(wsUrl);
 
                 ws.onopen = () => {
-                    // Pošleme velikost terminálu
                     const dims = fitAddon.proposeDimensions();
                     ws.send(Math.floor(dims.cols).toString());
                     ws.send(Math.floor(dims.rows).toString());
@@ -1581,7 +1560,6 @@ HTML_TEMPLATE = """
                     }
                 });
 
-                // Resize
                 const resizeObserver = new ResizeObserver(() => {
                     fitAddon.fit();
                     const dims = fitAddon.proposeDimensions();
@@ -1589,7 +1567,6 @@ HTML_TEMPLATE = """
                 });
                 resizeObserver.observe(container);
 
-                // Čištění při zavření okna
                 const checkInterval = setInterval(() => {
                     if (!document.getElementById(winId)) {
                         ws.close();
@@ -1655,7 +1632,6 @@ HTML_TEMPLATE = """
             if (app === 'calendar') createWindow('Kalendář', '<div style="padding:20px; text-align:center;">Kalendář (demo)</div>', 400, 300, 200, 150);
         }
 
-        // ==================== NOVÝ CODE EDITOR (s integrovaným terminálem) ====================
         function openCodeEditor() {
             const editorId = 'editor-' + Date.now();
             const termId = 'term-' + Date.now();
@@ -1684,7 +1660,6 @@ HTML_TEMPLATE = """
                 
                 if (!textarea || !termContainer) return;
 
-                // CodeMirror
                 const cm = CodeMirror.fromTextArea(textarea, {
                     lineNumbers: true,
                     mode: 'bash',
@@ -1706,7 +1681,6 @@ HTML_TEMPLATE = """
                 runBtn.addEventListener('click', () => {
                     const code = cm.getValue();
                     const lang = langSelect.value;
-                    // Výstup pošleme do terminálu
                     term.writeln(`\\x1b[33mSpouštím ${lang}...\\x1b[0m`);
                     fetch('/api/run', {
                         method: 'POST',
@@ -1724,7 +1698,6 @@ HTML_TEMPLATE = """
 
                 cm.setSize('100%', '300px');
 
-                // Terminál (xterm.js) – samostatný, nezávislý na WebSocket
                 const term = new Terminal({
                     cursorBlink: true,
                     theme: {
@@ -1744,11 +1717,9 @@ HTML_TEMPLATE = """
                 term.writeln('Vítejte v integrovaném terminálu editoru.');
                 term.writeln('Výstup z "Run" se zobrazí zde.');
 
-                // Resize terminálu
                 const resizeObserver = new ResizeObserver(() => fitAddon.fit());
                 resizeObserver.observe(termContainer);
 
-                // Čištění
                 const checkInterval = setInterval(() => {
                     if (!document.getElementById(winId)) {
                         term.dispose();
@@ -1759,7 +1730,6 @@ HTML_TEMPLATE = """
             }, 100);
         }
 
-        // ==================== HRY ====================
         function openPong() {
             const gameId = 'pong-' + Date.now();
             const content = `
@@ -2134,7 +2104,7 @@ HTML_TEMPLATE = """
             `;
             createWindow('Hry', content, 500, 300, 250, 150);
         }
-        // ========================= NASTAVENÍ =========================
+
         function openSettings() {
             fetch('/api/system-info')
                 .then(r => r.json())
@@ -2413,7 +2383,6 @@ HTML_TEMPLATE = """
                 });
         }
 
-        // ========================= FUNKCE PRO PROFILY =========================
         function loadProfile(name) {
             fetch('/api/load-profile', {
                 method: 'POST',
@@ -2446,7 +2415,6 @@ HTML_TEMPLATE = """
             }
         }
 
-        // ========================= FUNKCE PRO NASTAVENÍ =========================
         function changeWallpaper(value) {
             document.body.style.setProperty('--wallpaper', value);
             fetch('/api/set-wallpaper', { method: 'POST', body: 'wallpaper=' + encodeURIComponent(value), headers: {'Content-Type': 'application/x-www-form-urlencoded'} })
@@ -2564,8 +2532,9 @@ HTML_TEMPLATE = """
 </body>
 </html>
 """
+
 # ============================================================================
-# Spuštění aplikace
+# Spuštění serveru
 # ============================================================================
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
@@ -2576,4 +2545,3 @@ echo "🚀 Spouštím server..."
 echo "Připoj se na http://$(hostname -I | awk '{print $1}'):5000"
 cd ~/meowos
 python3 app.py
-EOF
