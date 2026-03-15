@@ -1,23 +1,34 @@
 #!/bin/bash
-# MeowOS – verze bez xterm.js, terminál přes textarea
+# MeowOS – plnohodnotný terminál s xterm.js (opraveno)
 # Autor: Jakub (s asistencí AI)
 
 set -e
 
 echo "🔧 Aktualizuji systém a instaluji potřebné balíčky..."
 sudo apt update
-sudo apt install -y python3-flask python3-psutil wireless-tools gcc golang-go
+sudo apt install -y python3-flask python3-psutil wireless-tools gcc golang-go python3-pip
+
+echo "📦 Instaluji Python knihovny pro WebSocket a PTY..."
+pip3 install flask-sock ptyprocess --break-system-packages
 
 echo "📁 Vytvářím složku pro aplikaci..."
 mkdir -p ~/meowos
 cd ~/meowos
 
-echo "🐧 Vytvářím hlavní soubor app.py (1500 řádků)..."
+echo "📂 Vytvářím podsložky..."
+mkdir -p static
 
+echo "⬇️ Stahuji xterm.js a addony (opravené odkazy)..."
+wget -O static/xterm.css https://cdn.jsdelivr.net/npm/xterm@5.5.0/css/xterm.min.css
+wget -O static/xterm.js https://cdn.jsdelivr.net/npm/xterm@5.5.0/lib/xterm.min.js
+wget -O static/xterm-addon-fit.js https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js
+wget -O static/xterm-addon-web-links.js https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js
+
+echo "🐧 Vytvářím hlavní soubor app.py (kompletní)..."
 cat > app.py << 'EOF'
 #!/usr/bin/env python3
 """
-MeowOS – verze bez xterm.js, terminál přes textarea
+MeowOS – finální edice s plnohodnotným terminálem (xterm.js) a hrami
 """
 
 import os
@@ -26,10 +37,15 @@ import subprocess
 import json
 import time
 import tempfile
+import ptyprocess
+import threading
 from datetime import datetime
 from flask import Flask, render_template_string, jsonify, request, send_from_directory
+from flask_sock import Sock
 
 app = Flask(__name__)
+sock = Sock(app)
+app.config['SOCK_SERVER_OPTIONS'] = {'ping_interval': 25}
 
 # ============================================================================
 # Konfigurace
@@ -92,6 +108,76 @@ def save_config(config):
         json.dump(config, f, indent=2)
 
 # ============================================================================
+# WebSocket terminál (PTY)
+# ============================================================================
+active_terminals = {}
+
+@sock.route('/terminal/<term_id>')
+def terminal_socket(ws, term_id):
+    """WebSocket endpoint pro každý terminál. Vytvoří PTY a propojí ho."""
+    try:
+        cols = int(ws.receive())
+        rows = int(ws.receive())
+        proc = ptyprocess.PtyProcessUnicode.spawn(['bash'], dimensions=(rows, cols))
+        active_terminals[term_id] = proc
+        
+        def reader():
+            try:
+                while True:
+                    try:
+                        data = proc.read(1024)
+                        if not data:
+                            break
+                        ws.send(data)
+                    except EOFError:
+                        break
+                    except Exception as e:
+                        print(f"Chyba čtení: {e}")
+                        break
+            finally:
+                if term_id in active_terminals:
+                    del active_terminals[term_id]
+        
+        thread = threading.Thread(target=reader)
+        thread.daemon = True
+        thread.start()
+        
+        while True:
+            message = ws.receive()
+            if message is None:
+                break
+            try:
+                proc.write(message)
+            except:
+                break
+                
+    except Exception as e:
+        print(f"Chyba terminálu {term_id}: {e}")
+    finally:
+        if term_id in active_terminals:
+            try:
+                active_terminals[term_id].terminate()
+            except:
+                pass
+            del active_terminals[term_id]
+
+@app.route('/terminal/resize/<term_id>/<int:cols>/<int:rows>', methods=['POST'])
+def terminal_resize(term_id, cols, rows):
+    if term_id in active_terminals:
+        try:
+            active_terminals[term_id].setwinsize(rows, cols)
+        except:
+            pass
+    return 'OK'
+
+# ============================================================================
+# Statické soubory
+# ============================================================================
+@app.route('/static/<path:filename>')
+def static_files(filename):
+    return send_from_directory('static', filename)
+
+# ============================================================================
 # Systémové funkce
 # ============================================================================
 def get_cpu_temperature():
@@ -152,7 +238,7 @@ def get_system_info():
     }
 
 # ============================================================================
-# Spouštění kódu
+# Spouštění kódu (pro Code Editor)
 # ============================================================================
 def run_code(code, lang):
     timeout = 5
@@ -383,7 +469,7 @@ def index():
     return render_template_string(HTML_TEMPLATE, **config)
 
 # ============================================================================
-# HTML šablona (bez xterm.js)
+# HTML šablona (s xterm.js)
 # ============================================================================
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -392,6 +478,11 @@ HTML_TEMPLATE = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MeowOS</title>
+    <!-- xterm.js -->
+    <link rel="stylesheet" href="/static/xterm.css">
+    <script src="/static/xterm.js"></script>
+    <script src="/static/xterm-addon-fit.js"></script>
+    <script src="/static/xterm-addon-web-links.js"></script>
     <!-- CodeMirror -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/theme/dracula.min.css">
@@ -842,27 +933,12 @@ HTML_TEMPLATE = """
             border-right: 1px solid rgba(255,255,255,0.1);
         }
 
-        .terminal-output {
-            background: rgba(0,0,0,0.6);
-            border-radius: 8px;
-            padding: 10px;
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
-            color: #a5d6ff;
-            height: 150px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-        }
-        .terminal-input {
-            width: 100%;
+        .xterm {
             padding: 8px;
-            margin-top: 8px;
-            background: rgba(0,0,0,0.4);
-            border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 6px;
-            color: white;
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
+            height: 100%;
+        }
+        .xterm-viewport {
+            background: transparent !important;
         }
 
         .settings-tabs {
@@ -1416,51 +1492,68 @@ HTML_TEMPLATE = """
         function openTerminal() {
             const termId = 'term-' + Date.now();
             const content = `
-                <div style="display: flex; flex-direction: column; height: 100%;">
-                    <div id="${termId}-output" class="terminal-output">Vítejte v terminálu\\n$ </div>
-                    <input type="text" id="${termId}-input" class="terminal-input" placeholder="zadej příkaz" autofocus>
-                </div>
+                <div id="${termId}-container" style="width:100%; height:100%; background: rgba(0,0,0,0.3); border-radius:8px;"></div>
             `;
-            const winId = createWindow('Terminál', content, 600, 350, 200, 150);
+            const winId = createWindow('Terminál', content, 700, 450, 200, 150);
+            
             setTimeout(() => {
-                const input = document.getElementById(`${termId}-input`);
-                const output = document.getElementById(`${termId}-output`);
-                if (!input) return;
+                const container = document.getElementById(`${termId}-container`);
+                if (!container) return;
 
-                input.addEventListener('keydown', function(e) {
-                    if (e.key === 'Enter') {
-                        const cmd = input.value;
-                        output.innerHTML += `$ ${cmd}\\n`;
-                        fetch('/api/cmd', {
-                            method: 'POST',
-                            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                            body: 'cmd=' + encodeURIComponent(cmd)
-                        })
-                        .then(r => r.text())
-                        .then(data => {
-                            output.innerHTML += data + '\\n$ ';
-                            output.scrollTop = output.scrollHeight;
-                        });
-                        terminalHistory.push(cmd);
-                        historyIndex = terminalHistory.length;
-                        input.value = '';
-                    } else if (e.key === 'ArrowUp') {
-                        if (historyIndex > 0) {
-                            historyIndex--;
-                            input.value = terminalHistory[historyIndex];
-                        }
-                        e.preventDefault();
-                    } else if (e.key === 'ArrowDown') {
-                        if (historyIndex < terminalHistory.length - 1) {
-                            historyIndex++;
-                            input.value = terminalHistory[historyIndex];
-                        } else {
-                            historyIndex = terminalHistory.length;
-                            input.value = '';
-                        }
-                        e.preventDefault();
+                const term = new Terminal({
+                    cursorBlink: true,
+                    theme: {
+                        background: 'rgba(0,0,0,0.5)',
+                        foreground: '#a5d6ff',
+                        cursor: '#c084fc'
+                    },
+                    fontSize: 14,
+                    fontFamily: 'Menlo, Monaco, "Courier New", monospace'
+                });
+
+                const fitAddon = new FitAddon();
+                const webLinksAddon = new WebLinksAddon();
+                
+                term.loadAddon(fitAddon);
+                term.loadAddon(webLinksAddon);
+                term.open(container);
+                fitAddon.fit();
+
+                const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${wsProto}//${window.location.host}/terminal/${termId}`;
+                const ws = new WebSocket(wsUrl);
+
+                ws.onopen = () => {
+                    const dims = fitAddon.proposeDimensions();
+                    ws.send(Math.floor(dims.cols).toString());
+                    ws.send(Math.floor(dims.rows).toString());
+                };
+
+                ws.onmessage = (event) => {
+                    term.write(event.data);
+                };
+
+                term.onData(data => {
+                    if (ws.readyState === WebSocket.OPEN) {
+                        ws.send(data);
                     }
                 });
+
+                const resizeObserver = new ResizeObserver(() => {
+                    fitAddon.fit();
+                    const dims = fitAddon.proposeDimensions();
+                    fetch(`/terminal/resize/${termId}/${Math.floor(dims.cols)}/${Math.floor(dims.rows)}`, { method: 'POST' });
+                });
+                resizeObserver.observe(container);
+
+                const checkInterval = setInterval(() => {
+                    if (!document.getElementById(winId)) {
+                        ws.close();
+                        term.dispose();
+                        resizeObserver.disconnect();
+                        clearInterval(checkInterval);
+                    }
+                }, 1000);
             }, 100);
         }
 
@@ -1533,9 +1626,7 @@ HTML_TEMPLATE = """
                         <button class="editor-run-btn" id="${editorId}-run"><i class="fa-solid fa-play"></i> Run</button>
                     </div>
                     <textarea id="${editorId}-code">#!/bin/bash\\necho "Hello from MeowOS!"</textarea>
-                    <div style="height: 150px; margin-top: 10px;">
-                        <div id="${termId}-output" class="terminal-output" style="height:100%;">Výstup se zobrazí zde...</div>
-                    </div>
+                    <div style="height: 200px; margin-top: 10px; background: rgba(0,0,0,0.3); border-radius: 8px;" id="${termId}-container"></div>
                 </div>
             `;
             const winId = createWindow('Code Editor', content, 750, 600, 250, 150);
@@ -1544,8 +1635,9 @@ HTML_TEMPLATE = """
                 const textarea = document.getElementById(`${editorId}-code`);
                 const langSelect = document.getElementById(`${editorId}-lang`);
                 const runBtn = document.getElementById(`${editorId}-run`);
-                const outputDiv = document.getElementById(`${termId}-output`);
-                if (!textarea || !outputDiv) return;
+                const termContainer = document.getElementById(`${termId}-container`);
+                
+                if (!textarea || !termContainer) return;
 
                 const cm = CodeMirror.fromTextArea(textarea, {
                     lineNumbers: true,
@@ -1568,7 +1660,7 @@ HTML_TEMPLATE = """
                 runBtn.addEventListener('click', () => {
                     const code = cm.getValue();
                     const lang = langSelect.value;
-                    outputDiv.innerHTML = `Spouštím ${lang}...\\n`;
+                    term.writeln(`\\x1b[33mSpouštím ${lang}...\\x1b[0m`);
                     fetch('/api/run', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
@@ -1576,15 +1668,44 @@ HTML_TEMPLATE = """
                     })
                     .then(r => r.text())
                     .then(output => {
-                        outputDiv.innerHTML += output;
-                        outputDiv.scrollTop = outputDiv.scrollHeight;
+                        term.writeln(output);
                     })
                     .catch(err => {
-                        outputDiv.innerHTML += `Chyba: ${err}`;
+                        term.writeln(`\\x1b[31mChyba: ${err}\\x1b[0m`);
                     });
                 });
 
                 cm.setSize('100%', '300px');
+
+                const term = new Terminal({
+                    cursorBlink: true,
+                    theme: {
+                        background: 'rgba(0,0,0,0.5)',
+                        foreground: '#a5d6ff',
+                        cursor: '#c084fc'
+                    },
+                    fontSize: 13,
+                    fontFamily: 'Menlo, Monaco, "Courier New", monospace'
+                });
+
+                const fitAddon = new FitAddon();
+                term.loadAddon(fitAddon);
+                term.open(termContainer);
+                fitAddon.fit();
+
+                term.writeln('Vítejte v integrovaném terminálu editoru.');
+                term.writeln('Výstup z "Run" se zobrazí zde.');
+
+                const resizeObserver = new ResizeObserver(() => fitAddon.fit());
+                resizeObserver.observe(termContainer);
+
+                const checkInterval = setInterval(() => {
+                    if (!document.getElementById(winId)) {
+                        term.dispose();
+                        resizeObserver.disconnect();
+                        clearInterval(checkInterval);
+                    }
+                }, 1000);
             }, 100);
         }
 
@@ -2398,7 +2519,7 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
 EOF
 
-echo "✅ Aplikace vytvořena (1500 řádků, bez xterm.js)."
+echo "✅ Aplikace vytvořena (kompletní, s xterm.js)."
 echo "🚀 Spouštím server..."
 echo "Připoj se na http://$(hostname -I | awk '{print $1}'):5000"
 cd ~/meowos
