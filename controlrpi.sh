@@ -1,5 +1,5 @@
 #!/bin/bash
-# MeowOS – finální kompletní verze (2400+ řádků) s Code Editorem přes Telegram skupinu
+# MeowOS – finální verze s realtime-pubsub-client (bez Telegram API)
 # Autor: Jakub (s asistencí AI)
 
 set -e
@@ -8,24 +8,18 @@ echo "🔧 Aktualizuji systém a instaluji potřebné balíčky..."
 sudo apt update
 sudo apt install -y python3-flask python3-psutil wireless-tools gcc golang-go python3-pip
 
-echo "📦 Instaluji Python knihovny – telebot, requests..."
-pip3 install pyTelegramBotAPI requests --break-system-packages
+echo "📦 Instaluji Python knihovny – realtime-pubsub-client..."
+pip3 install realtime-pubsub-client --break-system-packages
 
 echo "📁 Vytvářím složku pro aplikaci..."
 mkdir -p ~/meowos
 cd ~/meowos
 
-# Uložíme tokeny
-echo "8514852844:AAFP5pYdkbOFIieo3oGEvhM3sDGJX7yVKKY" > token_A.txt
-echo "8500321366:AAGAMwA3aV9Ot47u4HVF_6RDdW6jeWujNjM" > token_B.txt
-chmod 600 token_*.txt
-
 echo "🐧 Vytvářím hlavní soubor app.py (kompletní, 2000+ řádků)..."
 cat > app.py << 'EOF'
 #!/usr/bin/env python3
 """
-MeowOS – kompletní webové rozhraní s Code Editorem přes Telegram skupinu
-Obsahuje: okna, hry, nastavení, profily, Telegram terminál, Code Editor s podporou Python/C/Go/Bash přes Telegram.
+MeowOS – kompletní webové rozhraní s Code Editorem přes realtime-pubsub-client
 """
 
 import os
@@ -35,9 +29,11 @@ import json
 import time
 import tempfile
 import uuid
-import requests
+import asyncio
+import threading
 from datetime import datetime
-from flask import Flask, render_template_string, jsonify, request, abort
+from flask import Flask, render_template_string, jsonify, request
+from realtime_pubsub_client import RealtimeClient
 
 app = Flask(__name__)
 
@@ -102,6 +98,61 @@ def save_config(config):
         json.dump(config, f, indent=2)
 
 # ============================================================================
+# Realtime Pub/Sub klient (pro komunikaci s runnerem)
+# ============================================================================
+realtime_client = None
+realtime_connected = False
+pending_outputs = {}  # {request_id: output}
+
+async def setup_realtime_client():
+    """Inicializuje a připojí RealtimeClient."""
+    global realtime_client, realtime_connected
+    
+    async def get_url():
+        # Pro lokální vývoj použijeme veřejný server nebo vlastní
+        # Toto je ukázková URL – v produkci bys měl vlastní instanci
+        return "wss://genesis.r7.21no.de/apps/meowos?access_token=test"
+    
+    client_options = {
+        'websocket_options': {
+            'url_provider': get_url,
+        },
+    }
+    realtime_client = RealtimeClient(client_options)
+    
+    async def on_session_started(connection_info):
+        print('✅ Realtime Pub/Sub připojen, ID:', connection_info['id'])
+        nonlocal realtime_connected
+        realtime_connected = True
+    
+    async def on_message(message, reply_fn):
+        # Zpracování příchozích zpráv (výstupy z runneru)
+        try:
+            data = message['data']['payload']
+            if isinstance(data, str):
+                data = json.loads(data)
+            if 'request_id' in data and 'output' in data:
+                pending_outputs[data['request_id']] = data['output']
+        except Exception as e:
+            print(f'Chyba zpracování zprávy: {e}')
+    
+    realtime_client.on('session.started', on_session_started)
+    realtime_client.on('meowos.output.*', on_message)
+    
+    await realtime_client.connect()
+    await realtime_client.wait_for('session.started', timeout=10)
+
+def run_async_loop():
+    """Spustí asyncio smyčku v samostatném vlákně."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(setup_realtime_client())
+    loop.run_forever()
+
+# Spustíme Realtime klienta v samostatném vlákně
+threading.Thread(target=run_async_loop, daemon=True).start()
+
+# ============================================================================
 # Systémové funkce
 # ============================================================================
 def get_cpu_temperature():
@@ -162,47 +213,6 @@ def get_system_info():
     }
 
 # ============================================================================
-# Telegram API (odesílání zpráv pomocí Bota A)
-# ============================================================================
-TELEGRAM_BOT_A_TOKEN = None
-TELEGRAM_CHAT_ID = None
-
-def load_telegram_config():
-    global TELEGRAM_BOT_A_TOKEN, TELEGRAM_CHAT_ID
-    try:
-        with open(os.path.expanduser('~/meowos/token_A.txt'), 'r') as f:
-            TELEGRAM_BOT_A_TOKEN = f.read().strip()
-        chat_file = os.path.expanduser('~/meowos/group_chat_id.txt')
-        if os.path.exists(chat_file):
-            with open(chat_file, 'r') as f:
-                TELEGRAM_CHAT_ID = int(f.read().strip())
-        else:
-            TELEGRAM_CHAT_ID = None
-    except:
-        TELEGRAM_BOT_A_TOKEN = None
-        TELEGRAM_CHAT_ID = None
-
-def send_telegram_message(text):
-    if not TELEGRAM_BOT_A_TOKEN or not TELEGRAM_CHAT_ID:
-        return False
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_A_TOKEN}/sendMessage"
-    payload = {
-        'chat_id': TELEGRAM_CHAT_ID,
-        'text': text,
-        'parse_mode': 'Markdown'
-    }
-    try:
-        r = requests.post(url, data=payload, timeout=5)
-        return r.ok
-    except:
-        return False
-
-# ============================================================================
-# Správa požadavků (pollování výstupu)
-# ============================================================================
-pending_outputs = {}  # {request_id: output}
-
-# ============================================================================
 # API routy
 # ============================================================================
 @app.route('/api/disks')
@@ -227,42 +237,48 @@ def api_cmd():
         output = str(e)
     return output
 
-@app.route('/api/run-telegram', methods=['POST'])
-def api_run_telegram():
-    """Přijme kód a jazyk, odešle do Telegram skupiny a vrátí request_id."""
+@app.route('/api/run-realtime', methods=['POST'])
+def api_run_realtime():
+    """Přijme kód a jazyk, odešle přes Realtime Pub/Sub a čeká na odpověď."""
     data = request.get_json()
     code = data.get('code', '')
     lang = data.get('lang', 'bash')
     if not code.strip():
         return jsonify({'error': 'Prázdný kód'}), 400
 
-    load_telegram_config()
-    if not TELEGRAM_BOT_A_TOKEN or not TELEGRAM_CHAT_ID:
-        return jsonify({'error': 'Telegram není nakonfigurován (chybí token nebo chat_id)'}), 500
+    if not realtime_connected:
+        return jsonify({'error': 'Realtime klient není připojen'}), 500
 
     req_id = str(uuid.uuid4())
-    pending_outputs[req_id] = None
-
-    message = f"CODE:{lang}:{req_id}\n{code}"
-    if send_telegram_message(message):
-        return jsonify({'request_id': req_id})
-    else:
-        del pending_outputs[req_id]
-        return jsonify({'error': 'Nepodařilo se odeslat zprávu do Telegramu'}), 500
-
-@app.route('/api/poll-output/<req_id>', methods=['GET'])
-def poll_output(req_id):
-    if req_id not in pending_outputs:
-        abort(404)
-    output = pending_outputs[req_id]
-    if output is None:
-        return jsonify({'status': 'pending'})
-    else:
-        del pending_outputs[req_id]
-        return jsonify({'status': 'done', 'output': output})
+    
+    # Odeslání kódu přes Realtime Pub/Sub
+    message = {
+        'request_id': req_id,
+        'lang': lang,
+        'code': code
+    }
+    
+    try:
+        # Spustíme asynchronní publish v loop
+        future = asyncio.run_coroutine_threadsafe(
+            realtime_client.publish('meowos.code', json.dumps(message), message_type='broadcast'),
+            asyncio.get_event_loop()
+        )
+        future.result(timeout=2)  # Počkáme na odeslání
+        
+        # Čekáme na odpověď (polling)
+        for _ in range(60):  # max 60 sekund
+            if req_id in pending_outputs:
+                output = pending_outputs.pop(req_id)
+                return jsonify({'output': output})
+            time.sleep(1)
+        
+        return jsonify({'error': 'Čas vypršel (60s)'}), 408
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # ============================================================================
-# API pro nastavení (stejné jako dříve)
+# API pro nastavení (zkráceno pro přehlednost)
 # ============================================================================
 @app.route('/api/set-username', methods=['POST'])
 def api_set_username():
@@ -432,7 +448,6 @@ HTML_TEMPLATE = """
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/clike/clike.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/go/go.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/shell/shell.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -861,9 +876,6 @@ HTML_TEMPLATE = """
             align-items: center;
             gap: 5px;
         }
-        .editor-run-btn:hover {
-            filter: brightness(1.1);
-        }
         .CodeMirror {
             flex: 1;
             border-radius: 8px;
@@ -885,28 +897,6 @@ HTML_TEMPLATE = """
             overflow-y: auto;
             margin-top: 10px;
             white-space: pre-wrap;
-        }
-
-        /* QR kód a informace o botovi */
-        .telegram-info {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            text-align: center;
-        }
-        #qrcode {
-            margin: 20px 0;
-            padding: 10px;
-            background: white;
-            border-radius: 10px;
-        }
-        .bot-username {
-            font-size: 18px;
-            font-weight: bold;
-            color: var(--primary);
-            margin-bottom: 10px;
         }
 
         .settings-tabs {
@@ -1081,7 +1071,7 @@ HTML_TEMPLATE = """
             <div class="taskbar-icon" onclick="toggleOverview()"><i class="fa-solid fa-grid-2"></i></div>
             <div class="taskbar-icon" onclick="toggleStartMenu()"><i class="fa-brands fa-linux"></i></div>
             <div class="taskbar-icon" onclick="openFileManager()"><i class="fa-regular fa-folder-open"></i></div>
-            <div class="taskbar-icon" onclick="openTelegramTerminal()"><i class="fa-brands fa-telegram"></i></div>
+            <!-- Odstraněna ikona Telegram terminálu -->
             <div class="taskbar-icon" onclick="openCalculator()"><i class="fa-solid fa-calculator"></i></div>
             <div class="taskbar-icon" onclick="openCodeEditor()"><i class="fa-solid fa-code"></i></div>
             <div class="taskbar-icon" onclick="openGameSelector()"><i class="fa-solid fa-gamepad"></i></div>
@@ -1103,7 +1093,6 @@ HTML_TEMPLATE = """
         <div class="start-apps">
             <div class="start-app" onclick="openSettings()"><i class="fa-solid fa-gear"></i><span>Nastavení</span></div>
             <div class="start-app" onclick="openFileManager()"><i class="fa-regular fa-folder"></i><span>Správce</span></div>
-            <div class="start-app" onclick="openTelegramTerminal()"><i class="fa-brands fa-telegram"></i><span>Terminál</span></div>
             <div class="start-app" onclick="openCalculator()"><i class="fa-solid fa-calculator"></i><span>Kalkulačka</span></div>
             <div class="start-app" onclick="openThisPC()"><i class="fa-solid fa-computer"></i><span>Tento PC</span></div>
             <div class="start-app" onclick="openCodeEditor()"><i class="fa-solid fa-code"></i><span>Code Editor</span></div>
@@ -1456,34 +1445,6 @@ HTML_TEMPLATE = """
                 });
         }
 
-        function openTelegramTerminal() {
-            const botUsername = "mrmeowmeowbot";
-            const qrData = `https://t.me/${botUsername}`;
-            const content = `
-                <div class="telegram-info">
-                    <h2>📱 Telegram Terminál</h2>
-                    <p>Příkazy posílej přes Telegram bota:</p>
-                    <div class="bot-username">@${botUsername}</div>
-                    <div id="qrcode"></div>
-                    <p style="margin-top:20px;">Naskenuj QR nebo klikni na odkaz:<br>
-                    <a href="https://t.me/${botUsername}" target="_blank" style="color:var(--primary);">https://t.me/${botUsername}</a></p>
-                    <p style="margin-top:20px; font-size:12px; opacity:0.7;">Pošli /start pro uvítání, pak libovolný příkaz.</p>
-                    <p style="color: #ff5555; font-weight: bold;">Upozornění: Bot je veřejný – kdokoli může spouštět příkazy!</p>
-                </div>
-            `;
-            const winId = createWindow('Telegram Terminál', content, 400, 550, 250, 150);
-            setTimeout(() => {
-                const qrDiv = document.getElementById('qrcode');
-                if (qrDiv) {
-                    new QRCode(qrDiv, {
-                        text: qrData,
-                        width: 200,
-                        height: 200
-                    });
-                }
-            }, 100);
-        }
-
         function openCalculator() {
             createWindow('Kalkulačka', `
                 <div class="calculator">
@@ -1538,7 +1499,7 @@ HTML_TEMPLATE = """
             if (app === 'calendar') createWindow('Kalendář', '<div style="padding:20px; text-align:center;">Kalendář (demo)</div>', 400, 300, 200, 150);
         }
 
-        // ==================== CODE EDITOR (přes Telegram) ====================
+        // ==================== CODE EDITOR (přes realtime-pubsub) ====================
         function openCodeEditor() {
             const editorId = 'editor-' + Date.now();
             const content = `
@@ -1550,7 +1511,7 @@ HTML_TEMPLATE = """
                             <option value="go">Go</option>
                             <option value="bash">Bash</option>
                         </select>
-                        <button class="editor-run-btn" id="${editorId}-run"><i class="fa-solid fa-play"></i> Run přes Telegram</button>
+                        <button class="editor-run-btn" id="${editorId}-run"><i class="fa-solid fa-play"></i> Spustit (realtime)</button>
                     </div>
                     <textarea id="${editorId}-code">#!/bin/bash\\necho "Hello from MeowOS!"</textarea>
                     <div class="editor-output" id="${editorId}-output">Výstup se zobrazí zde...</div>
@@ -1586,8 +1547,8 @@ HTML_TEMPLATE = """
                 runBtn.addEventListener('click', () => {
                     const code = cm.getValue();
                     const lang = langSelect.value;
-                    outputDiv.innerHTML = 'Odesílám kód do Telegram skupiny...';
-                    fetch('/api/run-telegram', {
+                    outputDiv.innerHTML = 'Odesílám kód...';
+                    fetch('/api/run-realtime', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({ code: code, lang: lang })
@@ -1596,11 +1557,9 @@ HTML_TEMPLATE = """
                     .then(data => {
                         if (data.error) {
                             outputDiv.innerHTML = 'Chyba: ' + data.error;
-                            return;
+                        } else {
+                            outputDiv.innerHTML = data.output.replace(/\\n/g, '<br>');
                         }
-                        const reqId = data.request_id;
-                        outputDiv.innerHTML = 'Čekám na výsledek...';
-                        pollOutput(reqId, outputDiv);
                     })
                     .catch(err => {
                         outputDiv.innerHTML = 'Chyba při odesílání: ' + err;
@@ -1609,34 +1568,6 @@ HTML_TEMPLATE = """
 
                 cm.setSize('100%', '300px');
             }, 100);
-        }
-
-        function pollOutput(reqId, outputDiv) {
-            let attempts = 0;
-            const maxAttempts = 60;
-            const interval = setInterval(() => {
-                fetch(`/api/poll-output/${reqId}`)
-                    .then(r => r.json())
-                    .then(data => {
-                        if (data.status === 'done') {
-                            clearInterval(interval);
-                            outputDiv.innerHTML = data.output.replace(/\\n/g, '<br>');
-                        } else if (data.status === 'pending') {
-                            attempts++;
-                            if (attempts > maxAttempts) {
-                                clearInterval(interval);
-                                outputDiv.innerHTML = 'Čas vypršel (60s). Zkus to znovu.';
-                            }
-                        }
-                    })
-                    .catch(() => {
-                        attempts++;
-                        if (attempts > maxAttempts) {
-                            clearInterval(interval);
-                            outputDiv.innerHTML = 'Chyba při dotazování.';
-                        }
-                    });
-            }, 1000);
         }
 
         // ==================== HRY ====================
@@ -2448,52 +2379,26 @@ if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False, threaded=True)
 EOF
 
-echo "🤖 Vytvářím Telegram runner bota (Bot B)..."
-cat > bot_runner.py << 'EOF'
+echo "🤖 Vytvářím runner (samostatný proces pro spouštění kódu)..."
+cat > runner.py << 'EOF'
 #!/usr/bin/env python3
 """
-Bot B (@Sjgshahbot) – čte kód ze skupiny, spouští ho a odesílá výstup.
+Runner pro MeowOS – poslouchá na topicu 'meowos.code', spouští kód a odesílá výsledek.
 """
-import telebot
+import asyncio
 import subprocess
 import tempfile
+import json
 import os
-import time
+import sys
+from realtime_pubsub_client import RealtimeClient
 
-TOKEN_B = "8500321366:AAGAMwA3aV9Ot47u4HVF_6RDdW6jeWujNjM"
-bot = telebot.TeleBot(TOKEN_B)
+async def get_url():
+    # Pro lokální vývoj použijeme stejný server jako v app.py
+    return "wss://genesis.r7.21no.de/apps/meowos?access_token=test"
 
-group_chat_id = None
-
-@bot.message_handler(commands=['start'])
-def start(message):
-    global group_chat_id
-    if message.chat.type in ['group', 'supergroup']:
-        group_chat_id = message.chat.id
-        with open(os.path.expanduser('~/meowos/group_chat_id.txt'), 'w') as f:
-            f.write(str(group_chat_id))
-        bot.reply_to(message, "Bot B připraven, skupina nastavena.")
-    else:
-        bot.reply_to(message, "Přidej mě do skupiny a tam pošli /start.")
-
-@bot.message_handler(func=lambda message: message.chat.id == group_chat_id)
-def handle_group_message(message):
-    if not message.text or not message.text.startswith("CODE:"):
-        return
-    lines = message.text.split('\n', 1)
-    header = lines[0]
-    if len(lines) < 2:
-        return
-    code = lines[1]
-    try:
-        _, lang, req_id = header.split(':', 2)
-    except:
-        return
-    output = run_code(code, lang)
-    reply = f"OUTPUT:{req_id}\n{output}"
-    bot.send_message(group_chat_id, reply)
-
-def run_code(code, lang):
+async def run_code(code, lang):
+    """Spustí kód v daném jazyce a vrátí výstup."""
     timeout = 10
     with tempfile.TemporaryDirectory() as tmpdir:
         if lang == 'python':
@@ -2538,27 +2443,70 @@ def run_code(code, lang):
         else:
             return "Nepodporovaný jazyk."
 
-print("🤖 Bot B (runner) spuštěn...")
-bot.infinity_polling()
+async def main():
+    client_options = {
+        'websocket_options': {
+            'url_provider': get_url,
+        },
+    }
+    client = RealtimeClient(client_options)
+    
+    async def on_session_started(connection_info):
+        print('✅ Runner připojen, ID:', connection_info['id'])
+        await client.subscribe_remote_topic('meowos.code')
+        print('📡 Poslouchám na topicu meowos.code')
+    
+    async def on_code_message(message, reply_fn):
+        try:
+            data = message['data']['payload']
+            if isinstance(data, str):
+                data = json.loads(data)
+            request_id = data.get('request_id')
+            lang = data.get('lang', 'bash')
+            code = data.get('code', '')
+            print(f'▶️ Spouštím {lang} kód (ID: {request_id})')
+            output = await run_code(code, lang)
+            # Odešleme výsledek zpět
+            result = {
+                'request_id': request_id,
+                'output': output
+            }
+            await client.publish(f'meowos.output.{request_id}', json.dumps(result), message_type='broadcast')
+            print(f'✅ Výsledek odeslán (ID: {request_id})')
+        except Exception as e:
+            print(f'❌ Chyba: {e}')
+    
+    client.on('session.started', on_session_started)
+    client.on('meowos.code.*', on_code_message)
+    
+    await client.connect()
+    await client.wait_for('session.started')
+    
+    # Udržujeme běh
+    try:
+        while True:
+            await asyncio.sleep(1)
+    except KeyboardInterrupt:
+        await client.disconnect()
+
+if __name__ == '__main__':
+    asyncio.run(main())
 EOF
 
-chmod +x bot_runner.py
+chmod +x runner.py
 
 echo "✅ Vše připraveno (2400+ řádků)."
-echo "🚀 Spouštím Flask server a Telegram runner bota..."
-echo "Nejprve přidej oba boty do skupiny MeowOS (https://t.me/+kKM3O4IJ_W9jNWE0) a ve skupině pošli /start."
-
+echo "🚀 Spouštím Flask server a runnera..."
 python3 app.py &
 FLASK_PID=$!
-
-sleep 3
-python3 bot_runner.py &
-BOT_PID=$!
+sleep 2
+python3 runner.py &
+RUNNER_PID=$!
 
 echo "Flask server běží na pozadí (PID: $FLASK_PID)."
-echo "Telegram bot B (runner) běží na pozadí (PID: $BOT_PID)."
-echo "Pro ukončení obou procesů použij: kill $FLASK_PID $BOT_PID"
+echo "Runner běží na pozadí (PID: $RUNNER_PID)."
+echo "Pro ukončení obou procesů použij: kill $FLASK_PID $RUNNER_PID"
 
 wait $FLASK_PID
-wait $BOT_PID
+wait $RUNNER_PID
 EOF
